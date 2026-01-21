@@ -2,8 +2,8 @@
 
   "allowed_extensions": [
     ".py", ".java", ".cpp", ".c", ".h", ".js", ".ts", ".html", ".m",
-    ".css", ".sql", ".md", ".yaml", ".yml", ".xml",
-    ".cs", ".shader", ".compute", ".cginc", ".txt"
+    ".css", ".sql", ".yaml", ".yml", ".xml",
+    ".cs", ".shader", ".compute", ".cginc"
   ],
 
 
@@ -53,7 +53,7 @@
   ],
 
   "version": [
-    "AI_CodeFeeder V1.1.0",
+    "AI_CodeFeeder V1.1.1",
     "by ChaoPhone 2026.1.22"
   ]
 }

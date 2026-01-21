@@ -13,7 +13,7 @@ import time
 
 # 1. 确定配置文件路径
 current_dir = os.path.dirname(os.path.abspath(__file__))
-config_path = os.path.join(current_dir, 'config.json')
+config_path = os.path.join(current_dir, 'Core','config.json')
 
 # 2. 读取配置
 if not os.path.exists(config_path):
@@ -220,6 +220,40 @@ if __name__ == "__main__":
             )
 
             merge_files(project_root, output_path, files_to_process, error_content)
+
+            # --- 【新增】FeederGap 衔接逻辑 ---
+            if os.path.exists(output_path):
+                # 简单估算 Token (1 token ≈ 4 chars)
+                with open(output_path, 'r', encoding='utf-8') as f:
+                    content_len = len(f.read())
+
+                est_tokens = content_len // 4
+
+                print("\n" + "=" * 50)
+                print(f"📊 当前文档预估 Token 数: {est_tokens}")
+
+                # 给出评价
+                if est_tokens > 50000:
+                    print("⚠️ (文件较大，建议精简)")
+                else:
+                    print("✅ (大小适中)")
+
+                print("=" * 50)
+
+                # 询问是否启动 FeederGap
+                gap_choice = input("✂️ 是否启用 FeederGap 对文件做减法 (去除头文件/注释/杂项)? (y/n): ")
+
+                if gap_choice.lower() == 'y':
+                    try:
+                        from Core import FeederGap
+
+                        FeederGap.run_gap_process(output_path)
+                    except ImportError:
+                        print("❌ 错误：未找到 FeederGap.py，请确保它在同一目录下。")
+                    except Exception as e:
+                        print(f"❌ 运行出错: {e}")
+                else:
+                    print("已保持原样。")
 
 
 
