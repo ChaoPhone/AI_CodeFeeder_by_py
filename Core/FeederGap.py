@@ -4,7 +4,6 @@
 
 import os
 import re
-import sys
 
 
 def clean_code_content(content):
