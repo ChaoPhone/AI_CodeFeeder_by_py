@@ -1,126 +1,213 @@
-# FeederGap.py
-# 专门用于对 AI_CodeFeeder 生成的 Markdown 进行“瘦身”
-# 功能：去除头文件引用、块注释、压缩空行、过滤杂项文件
-
 import os
 import re
 import sys
 
 
-def clean_code_content(content):
+# ==========================================
+# 🧠 智能核心：代码骨架化 (Skeletonizer)
+# ==========================================
+def hollow_out_function_bodies(content):
     """
-    对代码内容进行清洗的核心逻辑
+    【黑科技】掏空函数体
+    原理：基于大括号层级计数 ({ count })。
+    保留：全局变量、宏定义、函数声明、结构体定义。
+    删除：函数内部的具体实现逻辑，替换为 ' /* ... */ '。
     """
-    # 1. 去除 /**/ 样式的块注释 (非贪婪匹配，跨行模式)
-    # 这里的 pattern 匹配 /* 开始，到 */ 结束的内容
-    content = re.sub(r'/\*[\s\S]*?\*/', '', content)
+    output = []
+    i = 0
+    length = len(content)
+    brace_depth = 0
+    in_string = False
+    in_char = False
 
-    # 2. 去除头文件引用 (#include ...)
-    # 匹配以 # 开头，中间可能有空格，紧接 include，直到行尾
-    content = re.sub(r'^\s*#\s*include.*$', '', content, flags=re.MULTILINE)
+    # 简单的状态机扫描
+    while i < length:
+        char = content[i]
 
-    # 3. 压缩连续空行
-    # 将连续2个及以上的换行符替换为2个换行符（保留段落感，但去除大段空白）
-    content = re.sub(r'\n{3,}', '\n\n', content)
+        # 1. 处理字符串/字符防止误判大括号
+        if char == '"' and content[i - 1] != '\\':
+            in_string = not in_string
+            output.append(char)
+            i += 1
+            continue
+        if char == "'" and content[i - 1] != '\\':
+            in_char = not in_char
+            output.append(char)
+            i += 1
+            continue
 
+        if in_string or in_char:
+            output.append(char)
+            i += 1
+            continue
+
+        # 2. 核心：大括号计数
+        if char == '{':
+            if brace_depth == 0:
+                # 刚进入第一层（通常是函数开始，或者结构体开始）
+                output.append('{')
+            brace_depth += 1
+        elif char == '}':
+            brace_depth -= 1
+            if brace_depth == 0:
+                # 回到第0层（函数结束）
+                output.append('}')
+        else:
+            # 只有在第0层（全局区域）的内容才保留
+            # 第1层及以上（函数体内部）全部丢弃
+            if brace_depth == 0:
+                output.append(char)
+            elif brace_depth == 1 and output[-1] == '{':
+                # 刚进入函数体，留个标记告诉AI这里有东西
+                output.append(' /* Code Omitted */ ')
+
+        i += 1
+
+    return "".join(output)
+
+
+# ==========================================
+# 🛠️ 常规清洗工具箱
+# ==========================================
+
+def remove_license_header(content):
+    """移除头部版权声明"""
+    match = re.match(r'^\s*/\*[\s\S]*?\*/', content)
+    if match:
+        header = match.group(0)
+        if any(k in header.lower() for k in ['copyright', 'license', 'author', 'file']):
+            return content[len(header):].lstrip()
     return content
 
 
+def clean_content_deeply(content, aggressive_mode=False):
+    """
+    深度清洗
+    :param aggressive_mode: 是否开启【骨架模式】
+    """
+    # 1. 基础正则清洗
+    # 去除 #include / #pragma
+    content = re.sub(r'^\s*#\s*(include|pragma|import).*$', '', content, flags=re.MULTILINE)
+    # 去除单行注释
+    content = re.sub(r'(?<!:)\/\/.*', '', content)
+    # 去除块注释
+    content = re.sub(r'/\*[\s\S]*?\*/', '', content)
+    # 去除断言
+    content = re.sub(r'\s*assert_param\s*\(.*?\);', '', content, flags=re.DOTALL)
+
+    # 2. 【高阶】如果开启骨架模式，执行掏空逻辑
+    if aggressive_mode:
+        content = hollow_out_function_bodies(content)
+
+    # 3. 最后的格式整理
+    # 删除空行
+    content = re.sub(r'^[ \t]+$', '', content, flags=re.MULTILINE)
+    content = re.sub(r'\n{3,}', '\n\n', content)
+
+    return content.strip()
+
+
 def is_junk_filename(filename):
-    """
-    使用正则表达式判断文件名是否包含 stm32, system_ 等杂项
-    """
-    # 这里定义过滤规则，忽略大小写
-    pattern = r'(stm32|system_|main\.h|stm32f4xx)'
-    return bool(re.search(pattern, filename, re.IGNORECASE))
+    # 可以在这里增加更多你不想看的文件
+    pattern = r'(stm32.*?xx|system_|main\.h|stm32f4xx_hal_conf|FreeRTOSConfig)'
+    if re.search(pattern, filename, re.IGNORECASE):
+        return True
+    return False
 
 
+# ==========================================
+# 🚀 主流程
+# ==========================================
 def run_gap_process(md_path):
+    print("=" * 50)
+    print("✂️  FeederGap启动！")
+    print("🦴  是否开启【骨架模式】(极大压缩)? ")
+    print("    Tip: 骨架模式会保留函数接口，删除函数体实现。")
     print("-" * 50)
-    print("✂️ 正在启动 FeederGap 精简程序...")
+
+    # --- 交互：是否开启骨架模式 ---
+    mode_input = input("(y/n): ")
+
+    aggressive = (mode_input.lower() == 'y')
 
     if not os.path.exists(md_path):
-        print(f"❌ 错误：找不到文件 {md_path}")
+        print("❌ 找不到目标 MD 文件")
         return
 
     try:
         with open(md_path, 'r', encoding='utf-8') as f:
-            full_content = f.read()
+            full_text = f.read()
     except Exception as e:
-        print(f"❌ 读取文件失败: {e}")
+        print(f"❌ 读取失败: {e}")
         return
 
-    # --- 核心处理流程 ---
-
-    # 1. 拆分文档
-    # 使用 "## File: " 作为分隔符拆分
-    # parts[0] 是目录树和报错信息（保留）
-    # parts[1:] 是各个具体的代码文件块
     separator = "## File: "
-    parts = full_content.split(separator)
+    parts = full_text.split(separator)
+    header = parts[0]
+    body_parts = parts[1:]
 
-    header_section = parts[0]
-    file_sections = parts[1:]
-
-    cleaned_sections = []
+    cleaned_parts = []
     removed_count = 0
+    chars_before = len(full_text)
 
-    print(f"🔍 正在分析 {len(file_sections)} 个文件块...")
+    # 用于统计“Token败家子”
+    file_stats = []
 
-    for section in file_sections:
-        # 提取第一行作为文件名（直到换行符）
-        newline_index = section.find('\n')
-        if newline_index == -1:
-            continue
+    print(f"🔍 正在处理 {len(body_parts)} 个文件块...")
 
-        file_path = section[:newline_index].strip()
-        code_body = section[newline_index:]
+    for part in body_parts:
+        newline_idx = part.find('\n')
+        if newline_idx == -1: continue
 
-        # 2. 过滤文件名 (STM32/System杂项)
-        if is_junk_filename(file_path):
-            print(f"   🗑️ 剔除杂项文件: {file_path}")
+        fname = part[:newline_idx].strip()
+        code_content = part[newline_idx:]
+
+        # 过滤
+        if is_junk_filename(fname):
             removed_count += 1
             continue
 
-        # 3. 清洗代码内容
-        cleaned_body = clean_code_content(code_body)
+        # 清洗
+        code_content = remove_license_header(code_content)
+        new_code = clean_content_deeply(code_content, aggressive_mode=aggressive)
 
-        # 重新组装
-        cleaned_sections.append(file_path + cleaned_body)
+        # 只有剩下的内容还有意义才保留
+        if len(new_code.strip()) < 5:
+            removed_count += 1
+            continue
 
-    # --- 生成新文件 ---
-    new_content = header_section + separator + separator.join(cleaned_sections)
+        cleaned_parts.append(fname + "\n" + new_code)
 
-    # 计算压缩率
-    original_len = len(full_content)
-    new_len = len(new_content)
-    ratio = (1 - new_len / original_len) * 100
+        # 记录统计信息
+        file_stats.append((fname, len(new_code)))
 
-    # 构造输出文件名 (xxx_Codes.md -> xxx_Codes_Gap.md)
+    # --- 组装 ---
+    new_full_text = header + separator + "\n" + ("\n" + separator).join(cleaned_parts)
+    chars_after = len(new_full_text)
+    ratio = (1 - chars_after / chars_before) * 100
+
+    # --- 保存 ---
     dir_name = os.path.dirname(md_path)
     base_name = os.path.basename(md_path)
-    name_without_ext = os.path.splitext(base_name)[0]
-    new_output_path = os.path.join(dir_name, f"{name_without_ext}_Gap.md")
+    # 根据模式给文件名加不同的后缀
+    suffix = "_Skeleton.md" if aggressive else "_Gap.md"
+    new_name = os.path.splitext(base_name)[0] + suffix
+    new_path = os.path.join(dir_name, new_name)
 
     try:
-        with open(new_output_path, 'w', encoding='utf-8') as f:
-            f.write(new_content)
+        with open(new_path, 'w', encoding='utf-8') as f:
+            f.write(new_full_text)
 
-        print("-" * 50)
-        print(f"✅ 精简完成！")
-        print(f"📉 剔除文件数: {removed_count}")
-        print(f"📉 体积压缩: {original_len} -> {new_len} chars (节省 {ratio:.1f}%)")
-        print(f"💾 新文件已生成: {new_output_path}")
+        print("\n" + "=" * 50)
+        print(f"✅ 处理完成！")
+        print(f"📉 移除文件: {removed_count} 个")
+        print(f"📉 字符压缩: {chars_before} -> {chars_after} (瘦身 {ratio:.1f}%)")
+        print("\n💾 输出文件: " + new_path)
+        print("=" * 50)
 
-        # 自动打开新文件位置
         if os.name == 'nt':
             import subprocess
-            subprocess.Popen(f'explorer /select,"{os.path.abspath(new_output_path)}"')
+            subprocess.Popen(f'explorer /select,"{os.path.abspath(new_path)}"')
 
     except Exception as e:
-        print(f"❌ 写入新文件失败: {e}")
-
-
-if __name__ == "__main__":
-    # 测试用
-    pass
+        print(f"❌ 写入失败: {e}")

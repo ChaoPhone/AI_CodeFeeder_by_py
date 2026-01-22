@@ -159,9 +159,9 @@ def merge_files(start_path, output_path, target_files, error_log=None):
 
 
 if __name__ == "__main__":
-    print("-" * 50)
+    print("=" * 50)
     print(VERSION_LATEST)
-    print("-" * 50)
+    print("=" * 50)
 
     # --- 初始化 Tkinter ---
     root = tk.Tk()
