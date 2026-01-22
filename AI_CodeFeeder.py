@@ -50,55 +50,55 @@ VERSION_LATEST = "\n".join(config_data.get('version', ["Unknown Version"]))
 def is_text_file(filename):
     return os.path.splitext(filename)[1].lower() in ALLOWED_EXTENSIONS
 
-def get_clipboard_content(root):
+def get_clipboard_content(my_clipboard):
     """安全获取剪贴板内容"""
     try:
         # 尝试获取剪贴板的文本内容
-        return root.clipboard_get()
-    except:
+        return my_clipboard.clipboard_get()
+    except tk.TclError:
         # 如果剪贴板为空、非文本或无法访问，返回空字符串，防止报错
         return ""
 
-def get_sorted_file_list(start_path):
+def get_sorted_file_list(start_path:str):
     """扫描并返回所有符合条件的文件路径列表"""
     file_list = []
-    for root, dirs, files in os.walk(start_path):
+    for root_folder, dirs, files in os.walk(start_path):
         dirs[:] = [d for d in dirs if d not in IGNORE_DIRS]
 
-        for f in files:
+        for file_reader in files:
             # 1. 检查完全匹配的黑名单
-            if f in IGNORE_FILES: continue
-            if f.endswith('_Codes.md'): continue
+            if file_reader in IGNORE_FILES: continue
+            if file_reader.endswith('_Codes.md'): continue
 
             # 2. 检查前缀黑名单
-            if any(f.startswith(prefix) for prefix in IGNORE_PREFIXES): continue
+            if any(file_reader.startswith(prefix) for prefix in IGNORE_PREFIXES): continue
 
-            if is_text_file(f):
-                rel_path = os.path.relpath(os.path.join(root, f), start_path)
+            if is_text_file(file_reader):
+                rel_path = os.path.relpath(os.path.join(root_folder, file_reader), start_path)
                 file_list.append(rel_path)
     return sorted(file_list)
 
 
-def generate_tree(start_path, files_to_include):
+def generate_tree(start_path:str, files_to_include):
     """生成目录树结构的字符串"""
     tree_str = "# 文件目录树 Project Directory Structure\n\n```text\n"
     tree_str += f"{os.path.basename(start_path)}/\n"
     included_set = set(files_to_include)
 
-    for root, dirs, files in os.walk(start_path):
+    for root_folder, dirs, files in os.walk(start_path):
         dirs[:] = [d for d in dirs if d not in IGNORE_DIRS]
-        rel_path = os.path.relpath(root, start_path)
+        rel_path = os.path.relpath(root_folder, start_path)
         level = 0 if rel_path == '.' else rel_path.count(os.sep) + 1
         indent = ' ' * 4 * level
-        subindent = ' ' * 4 * (level + 1)
+        sub_indent = ' ' * 4 * (level + 1)
 
         if rel_path != '.':
-            tree_str += f"{indent}{os.path.basename(root)}/\n"
+            tree_str += f"{indent}{os.path.basename(root_folder)}/\n"
 
-        for f in files:
-            file_rel_path = os.path.relpath(os.path.join(root, f), start_path)
+        for file_reader in files:
+            file_rel_path = os.path.relpath(os.path.join(root_folder, file_reader), start_path)
             if file_rel_path in included_set:
-                tree_str += f"{subindent}{f}\n"
+                tree_str += f"{sub_indent}{file_reader}\n"
 
     tree_str += "```\n\n---\n\n"
     return tree_str
@@ -115,14 +115,14 @@ def show_file_in_explorer(path):
             subprocess.Popen(f'explorer /select,"{abs_path}"')
         else:
             print("非 Windows 系统，请手动打开目录。")
-    except Exception as e:
-        print(f"⚠️ 无法自动打开文件夹: {e}")
+    except Exception as open_folder_exception:
+        print(f"⚠️ 无法自动打开文件夹: {open_folder_exception}")
 
 
-def merge_files(start_path, output_path, target_files, error_log=None):
+def merge_files(start_path, merged_output_path, target_files, error_log=None):
     """执行合并写入"""
     try:
-        with open(output_path, 'w', encoding='utf-8') as outfile:
+        with open(merged_output_path, 'w', encoding='utf-8') as outfile:
 
             # 1. 先写目录树 (保持不变)
             outfile.write(generate_tree(start_path, target_files))
@@ -146,14 +146,14 @@ def merge_files(start_path, output_path, target_files, error_log=None):
                         outfile.write(f"## File: {rel_path}\n\n")
                         ext = os.path.splitext(rel_path)[1][1:] or 'text'
                         outfile.write(f"```{ext}\n{content}\n```\n\n---\n\n")
-                except Exception as e:
-                    print(f"读取错误: {rel_path} - {e}")
+                except Exception as read_exception:
+                    print(f"读取错误: {rel_path} - {read_exception}")
 
-        print(f"\n✅ 成功！文件已生成: {output_path}")
-        show_file_in_explorer(output_path)
+        print(f"\n✅ 成功！文件已生成: {merged_output_path}")
+        show_file_in_explorer(merged_output_path)
 
-    except Exception as e:
-        print(f"\n❌ 写入失败: {e}")
+    except Exception as write_exception:
+        print(f"\n❌ 写入失败: {write_exception}")
 
 
 
@@ -245,6 +245,7 @@ if __name__ == "__main__":
 
                 if gap_choice.lower() == 'y':
                     try:
+                        # noinspection PyUnusedImports
                         from Core import FeederGap
 
                         FeederGap.run_gap_process(output_path)
