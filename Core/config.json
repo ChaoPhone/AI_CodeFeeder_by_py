@@ -1,59 +1,32 @@
 {
-
   "allowed_extensions": [
-    ".py", ".java", ".cpp", ".c", ".h", ".js", ".ts", ".html", ".m",
-    ".css", ".sql", ".yaml", ".yml", ".xml",
-    ".cs", ".shader", ".compute", ".cginc"
+    ".py", ".java", ".cpp", ".c", ".h", ".hpp", ".js", ".ts", ".html", ".css",
+    ".sql", ".yaml", ".yml", ".xml", ".json", ".md", ".txt", ".cs",
+    ".shader", ".compute", ".cginc", ".go", ".rs", ".lua"
   ],
-
 
   "ignore_dirs": [
-
     ".git", ".idea", ".vscode", "__pycache__", "venv", "env", "node_modules", ".DS_Store",
-    
-
-    "build", "dist", "bin", "obj", "cmake-build-debug", "cmake-build-release", 
-    "gradle", ".gradle",
-
-
-    "Library", "Temp", "Logs", "UserSettings", "Packages",
-
-
-    "Drivers",      
-    "Middlewares",  
-    "CMSIS",        
-    "MDK-ARM",     
-    "EWARM",        
-    "cmake",        
-    "DebugVals",    
-    "Docs", "Doc"   
+    "build", "dist", "bin", "obj", "target",
+    "gradle", ".gradle", "Library", "Temp", "Logs", "UserSettings",
+    "Drivers", "Middlewares", "CMSIS", "MDK-ARM", "EWARM", "DebugVals", "Docs", "Doc"
   ],
-
 
   "ignore_prefixes": [
-    "stm32f4xx_it", 
-    "system_stm32f4xx", 
-    "stm32f4xx_hal_conf",
-    "stm32f4xx_hal_msp", 
-    "sysmem", 
-    "syscalls",
-    "stm32f4xx_hal_timebase_tim.c", 
-    "stm32f1xx_hal_conf.h",
-    "stm32f1xx_it.h",
-    "stm32f1xx_hal_msp.c",
-    "stm32f1xx_it.c",
-    "system_stm32f1xx.c",
-    "FreeRTOSConfig.h"
+    "stm32f4xx_it", "system_stm32", "stm32f4xx_hal_conf",
+    "stm32f4xx_hal_msp", "sysmem", "syscalls", "FreeRTOSConfig",
+    "jquery", "bootstrap"
   ],
 
-
   "ignore_files": [
-    "AI_CodeFeeder.py"
-
+    "CodeFeeder_GUI.py",
+    "install_menu.py",
+    "package-lock.json",
+    "yarn.lock"
   ],
 
   "version": [
-    "AI_CodeFeeder V1.1.1",
-    "by ChaoPhone 2026.1.22"
+    "AI CodeFeeder v2.0 (Pipeline Edition)",
+    "Refactored for Efficiency"
   ]
 }

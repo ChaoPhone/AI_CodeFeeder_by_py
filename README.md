@@ -1,7 +1,7 @@
 
 ***
 
-# 🚀 AI\_CodeFeeder
+# 🚀 AI\_CodeFeeder (V1.5.0 GUI Edition)
 
 > **Stop Copy-Pasting. Start Coding.**
 >
@@ -9,9 +9,9 @@
 
 祝看到这里的同学期末周科科满绩！！！送你一锅重庆鸡公煲🫕🥰🥰🥰
 
-## 📖 简介 
+## 📖 简介
 
-**众所周知，大多数 AI（如 DeepSeek,豆包,ChatGPT, Claude, Gemini）不允许直接上传代码文件夹。**
+**众所周知，大多数 AI（如 DeepSeek, 豆包, ChatGPT, Claude, Gemini）不允许直接上传代码文件夹。**
 
 劳累了一天的人们，往往还要不厌其烦地打开一个个文件，复制、粘贴，或者被迫使用 IDE 内置的昂贵或不够聪明的 AI 插件。这种方式不仅效率低下，而且丢失了项目原本的文件结构上下文，导致 AI 的回答往往不够准确。
 
@@ -19,145 +19,139 @@
 
 它是一个基于 Python 的轻量级工具，能够**一键扫描**你的工程目录，智能过滤掉无关文件（如 `build`, `.git`, `node_modules` 以及 STM32/Unity 的垃圾文件），生成一份包含**完整目录树**和**所有源码内容**的 Markdown 文件。
 
-你只需把这个文件“喂”给 AI，它就能立刻理解你的整个项目。
+**V1.5.0 版本全新升级了图形化界面 (GUI)**，支持可视化选择文件、多种代码压缩模式，让投喂 AI 变得更加精准和优雅。
 
+***
 
-## 🛠️ 快速开始
+## ✨ V1.5.0 新版特性
 
-### 1. 环境要求
+* **🖥️ 图形化交互界面**：告别黑乎乎的命令行，采用深色主题 (Dark Blue) 界面，颜值与实用并存。
 
-* Python 3.x (已安装即可)
+* **🌳 可视化目录树**：采用 Unix Tree 风格 (`├──`) 展示项目结构，支持**点击文件**进行「选中/忽略」切换。
 
-### 2. 使用方法
+* **🎛️ 三种投喂模式**：
 
-1. 下载 `AI_CodeFeeder.py` 和 `config.json` 到同一目录。
+  * **Normal**: 完整代码，原汁原味。
 
-2. 运行脚本：
+  * **Gap**: 自动去除所有注释和空行，大幅节省 Token。
+
+  * **Skeleton**: 仅保留类和函数定义（骨架），适合让 AI 理解大型项目架构。
+
+* **🖱️ 右键菜单集成**：支持注册到 Windows 右键菜单，在任意文件夹上右键即可启动。
+
+* **📄 双格式输出**：支持同时生成 `.md` 和 `.txt` 文件，满足不同 AI 模型的上传需求。
+
+***
+
+## 🛠️ 使用步骤
+
+### 1. 环境准备
+
+确保电脑已安装 Python 3.x。
+
+### 2. 首次安装（右键菜单集成）
+
+为了获得最佳体验，建议运行注册脚本，将工具集成到系统右键菜单：
+
+1. **以管理员身份**运行 CMD 或 PowerShell。
+
+2. 进入项目根目录，运行：
 
    Bash
 
    ```
-   python AI_CodeFeeder.py
+   python install_menu.py
    ```
 
-3. **操作步骤**：
+   _(注：如果文件夹中没有此脚本，请忽略此步，直接运行 CodeFeeder.py 即可)_
 
-   * **选择目录**：脚本会弹出一个窗口，选择你想要分析的**项目根目录**。
+### 3. 开始使用
 
-   * **确认扫描**：终端会显示即将包含的文件列表，按 **Enter (回车)** 确认。
+**方式 A：右键启动（推荐）**
 
-   * **保存文件**：选择输出 `.md` 文件的保存位置（默认名为 `目录名_Codes.md`）。
+在任意代码文件夹上 **右键** -> 选择 **📂 使用 AI CodeFeeder 打开**。
 
-### 3. 投喂 AI
+**方式 B：直接运行**
 
-打开生成的 `.md` 文件，全选复制，发送给 AI (ChatGPT / Claude / NotebookLM / DeepSeek 等)，并附上你的问题：
+双击运行 `CodeFeeder.py`，然后点击界面上的 "📂 Browse" 选择项目路径。
 
-> "这是我的项目代码和结构，请帮我分析..."
+### 4. 界面操作流程
 
-## ⚙️ 配置说明
+1. **检查目录树**：左侧窗口会列出所有代码文件。
 
-从 V1.0.8 版本开始，配置已经分离到单独的 config.json 文件中，你可以直接编辑该文件来调整各种过滤规则。
+   * **高亮 (白色)**：将被包含在生成文件中。
 
-### 1. 包含的文件类型
+   * **灰显 + 删除线**：将被忽略。
 
-在 config.json 中修改 allowed_extensions 数组：
+   * _操作_：点击文件名可手动切换选中状态。
 
-JSON
+2. **选择模式 (Mode)**：在底部选择 `Normal` (全量)、`Gap` (去注释) 或 `Skeleton` (仅骨架)。
 
-```
-"allowed_extensions": [
-  ".py", ".java", ".cpp", ".c", ".h", ".js", ".ts", ".html", ".m",
-  ".css", ".sql", ".md", ".yaml", ".yml", ".xml",
-  ".cs", ".shader", ".compute", ".cginc", ".txt"
-]
-```
+3. **附加选项**：勾选 `Also .txt` 可额外生成一份纯文本副本。
 
-### 2. 忽略的目录
+4. **生成**：点击右下角的 **🚀 Generate Markdown**。
 
-在 config.json 中修改 ignore_dirs 数组。代码已默认内置了以下屏蔽规则：
-
-* **通用**：`.git`, `.idea`, `.vscode`, `__pycache__`, `venv`, `env`, `node_modules`, `.DS_Store`
-
-* **编译产物**：`build`, `dist`, `bin`, `obj`, `cmake-build-debug`, `cmake-build-release`, `gradle`, `.gradle`
-
-* **STM32/嵌入式**：`Drivers`, `Middlewares`, `CMSIS`, `MDK-ARM`, `EWARM`, `cmake`, `DebugVals`, `Docs`, `Doc`
-
-* **Unity**：`Library`, `Temp`, `Logs`, `UserSettings`, `Packages`
-
-### 3. 忽略特定前缀文件 (CubeMX 专用)
-
-在 config.json 中修改 ignore_prefixes 数组。这对于保持上下文简洁非常重要，它屏蔽了大量自动生成的冗余代码：
-
-JSON
-
-```
-"ignore_prefixes": [
-  "stm32f4xx_it", "system_stm32f4xx", "stm32f4xx_hal_conf",
-  "stm32f4xx_hal_msp", "sysmem", "syscalls",
-  "stm32f4xx_hal_timebase_tim.c", "FreeRTOSConfig.h"
-]
-```
-
-### 4. 忽略特定文件
-
-在 config.json 中修改 ignore_files 数组，可以精确忽略某些特定文件：
-
-JSON
-
-```
-"ignore_files": [
-  "AI_CodeFeeder.py",
-  "project_context_for_notebooklm.md"
-]
-```
-
-## 📝 输出示例 
-
-生成的 Markdown 文件内容如下所示：
-
-Markdown
-
-````
-# Project Directory Structure
-
-```text
-MyProject/
-    Core/
-        Src/
-            main.c
-    PID/
-        speed_pid.c
-````
+5. **完成**：程序会自动打开生成文件所在的文件夹，直接把 `.md` 或 `.txt` 拖给 AI 即可。
 
 ***
 
-## File: Core/Src/main.c
+## 🏗️ 架构说明
 
-C
+V1.5.0 采用了 **MVC (Model-View-Controller)** 分层架构，实现了逻辑与界面的彻底解耦，便于后续扩展。
+
+Plaintext
 
 ```
-#include "main.h"
-// ... 代码内容 ...
+AI_CodeFeeder/
+├── CodeFeeder.py          # [入口] 程序启动器，负责引导环境
+├── AppUI/                 # [视图层] 负责所有界面显示
+│   ├── MainWindow.py      # 主窗口逻辑、事件绑定、多线程调度
+│   └── Tree.py            # 视觉组件：负责计算 ASCII 目录树结构
+├── Core/                  # [模型层] 核心业务逻辑
+│   ├── Analyzer.py        # 文件扫描、过滤、Pipeline 流水线处理
+│   ├── CodeCleaner.py     # 代码清洗算法 (正则去注释、提取骨架)
+│   ├── ConfigLoader.py    # 配置加载器
+│   └── config.json        # [配置] 用户自定义规则
+└── README.md              # 说明文档
 ```
+
+* **AppUI**: 这里的代码只负责“长什么样”和“怎么点”。
+
+* **Core**: 这里的代码只负责“读文件”、“洗代码”和“写文件”，完全不知道界面的存在。
+
+* **CodeFeeder.py**: 极简入口，防止 Python 路径混淆。
 
 ***
 
-## File: PID/speed\_pid.c
+## ⚙️ 配置说明 (Advanced)
 
-C
+所有的过滤规则都存储在 `Core/config.json` 中，你可以直接编辑它来定制你的规则：
 
-```
-// ... 代码内容 ...
-```
+* **`allowed_extensions`**: 定义哪些后缀的文件会被扫描（如 `.py`, `.c`, `.cpp`, `.java` 等）。
 
+* **`ignore_dirs`**: 递归扫描时强制跳过的文件夹（如 `.git`, `node_modules`, `build`）。
 
+* **`ignore_prefixes`**: 针对嵌入式开发（STM32 CubeMX），忽略特定前缀的自动生成文件。
+
+* **`ignore_files`**: 精确忽略特定的文件名。
+
+***
 
 ## 👨‍💻 版本与作者
 
-**AI_CodeFeeder V1.0.8**
+**AI\_CodeFeeder V1.5.0 (Pipeline Edition)**
 
+* **Original Author**: ChaoPhone
 
-Updated by **ChaoPhone** on 2026/1/18
+* **Refactored By**: AI Assistant & User
+
+* **Last Update**: 2026/02/06
+
+***
+
+**V1.5.0** [GUI版本]  Updated by **ChaoPhone** on 2026.02.06
+
+**V1.0.8** [MVP版本] Updated by **ChaoPhone** on 2026.01.18
 
 ---
 *Happy Coding!*
