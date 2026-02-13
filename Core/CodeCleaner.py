@@ -64,23 +64,37 @@ def remove_license_header(content):
     return content
 
 
-def clean_content_deeply(content, aggressive_mode=False):
+def clean_content_deeply(content, ext, aggressive_mode=False):
     """
     深度清洗流水线
+    :param ext: 文件扩展名 (如 '.py', '.cpp')
     :param aggressive_mode: True=骨架模式, False=Gap模式(仅去注释)
     """
-    # 1. 移除引用
-    content = re.sub(r'^\s*#\s*(include|pragma|import).*$', '', content, flags=re.MULTILINE)
+    ext = ext.lower()
 
-    # 2. 移除注释
-    content = re.sub(r'(?<!:)\/\/.*', '', content)  # 单行
-    content = re.sub(r'/\*[\s\S]*?\*/', '', content)  # 块注释
+    # 1. 根据后缀决定清洗逻辑
+    if ext == '.py':
+        # 移除 Python import
+        content = re.sub(r'^\s*(import|from)\s+.*$', '', content, flags=re.MULTILINE)
+        # 移除 Python 单行注释
+        content = re.sub(r'#.*', '', content)
+        # 移除 Python 多行注释 (''' 或 """) - 简单处理，不考虑字符串内的情况
+        content = re.sub(r'\'\'\'[\s\S]*?\'\'\'', '', content)
+        content = re.sub(r'\"\"\"[\s\S]*?\"\"\"', '', content)
+        
+    elif ext in ['.c', '.cpp', '.h', '.hpp']:
+        # 移除 C/C++ 引用
+        content = re.sub(r'^\s*#\s*(include|pragma|import).*$', '', content, flags=re.MULTILINE)
+        # 移除 C/C++ 单行注释
+        content = re.sub(r'(?<!:)\/\/.*', '', content)
+        # 移除 C/C++ 块注释
+        content = re.sub(r'/\*[\s\S]*?\*/', '', content)
 
-    # 3. 骨架模式
-    if aggressive_mode:
+    # 2. 骨架模式 (仅对支持大括号的语言有效，当前逻辑基于大括号)
+    if aggressive_mode and ext in ['.c', '.cpp', '.h', '.hpp']:
         content = hollow_out_function_bodies(content)
 
-    # 4. 格式整理 (去多余空行)
+    # 3. 格式整理 (去多余空行)
     content = re.sub(r'^[ \t]+$', '', content, flags=re.MULTILINE)
     content = re.sub(r'\n{3,}', '\n\n', content)
 

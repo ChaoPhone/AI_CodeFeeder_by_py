@@ -1,6 +1,6 @@
 {
   "allowed_extensions": [
-    ".py", ".java", ".cpp", ".c", ".h", ".hpp", ".js", ".ts", ".html", ".css",
+    ".py", ".pyw", ".java", ".cpp", ".c", ".h", ".hpp", ".js", ".ts", ".html", ".css",
     ".sql", ".yaml", ".yml", ".xml", ".json", ".md", ".txt", ".cs",
     ".shader", ".compute", ".cginc", ".go", ".rs", ".lua"
   ],
@@ -20,13 +20,12 @@
 
   "ignore_files": [
     "CodeFeeder_GUI.py",
-    "install_menu.py",
     "package-lock.json",
     "yarn.lock"
   ],
 
   "version": [
-    "AI CodeFeeder v2.0 (Pipeline Edition)",
+    "AI CodeFeeder v2.0 ",
     "Refactored for Efficiency"
   ]
 }

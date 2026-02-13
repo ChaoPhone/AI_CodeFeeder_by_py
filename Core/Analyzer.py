@@ -20,8 +20,6 @@ class ProjectManager:
 
             for f in files:
                 if f in ignore_files_dynamic: continue
-                # 过滤输出文件
-                if f.endswith('_Codes.md') or f.endswith('_Gap.md') or f.endswith('_Skeleton.md'): continue
 
                 # 前缀过滤
                 if any(f.startswith(prefix) for prefix in self.cfg.ignore_prefixes): continue
@@ -36,15 +34,9 @@ class ProjectManager:
         # 按相对路径排序
         return sorted(file_list, key=lambda x: x[0])
 
-    def _generate_tree_text(self, start_path, selected_rel_paths):
+    def _generate_tree_text(self, start_path, selected_rel_paths, title="# Project Directory Structure"):
         """
         生成 Unix 风格的 ASCII 目录树 (Tree Command Style)
-        Example:
-        Project/
-        ├── Core/
-        │   ├── Analyzer.py
-        │   └── config.json
-        └── main.py
         """
         # 1. 构建嵌套字典树结构
         tree_structure = {}
@@ -52,7 +44,6 @@ class ProjectManager:
             parts = path.split(os.sep)
             current_level = tree_structure
             for part in parts:
-                # setdefault 返回键对应的值，如果键不存在则设为 {}
                 current_level = current_level.setdefault(part, {})
 
         # 2. 递归渲染
@@ -62,7 +53,7 @@ class ProjectManager:
 
         self._render_tree(tree_structure, "", lines)
 
-        return "# Project Directory Structure\n\n```text\n" + "\n".join(lines) + "\n```\n\n---\n\n"
+        return f"{title}\n\n```text\n" + "\n".join(lines) + "\n```\n\n---\n\n"
 
     def _render_tree(self, tree, prefix, lines):
         """递归渲染辅助函数"""
@@ -93,46 +84,55 @@ class ProjectManager:
                 extension = "    " if is_last_item else "│   "
                 self._render_tree(subtree, prefix + extension, lines)
 
-    def pipeline_write(self, start_path, file_items, output_path, mode='normal', error_log=None):
+    def pipeline_write(self, start_path, file_items, output_path, mode='normal', error_log=None, ignored_rels=None):
         """
         核心流水线：写入格式严格对齐
+        返回生成的总字符数，用于估算 Token
         """
         selected_rels = [item[0] for item in file_items]
+        total_content = ""
 
+        # 1. 生成目录树
+        tree_text = self._generate_tree_text(start_path, selected_rels)
+        total_content += tree_text
+
+        # 1.5 生成忽略目录树
+        if ignored_rels:
+            ignored_tree_text = self._generate_tree_text(start_path, ignored_rels, title="# Ignored Files & Directories")
+            total_content += ignored_tree_text
+
+        # 2. 生成报错日志
+        if error_log:
+            err_text = f"\n# 🛑 Compilation Error Log\n> Auto-detected from clipboard\n\n```text\n{error_log}\n```\n\n---\n\n"
+            total_content += err_text
+
+        # 3. 遍历并处理文件内容
+        for rel_path, full_path in file_items:
+            try:
+                with open(full_path, 'r', encoding='utf-8', errors='ignore') as infile:
+                    content = infile.read()
+
+                # === 清洗逻辑 ===
+                final_content = content
+                file_ext = os.path.splitext(rel_path)[1].lower()
+                ext_for_md = file_ext[1:] or 'text'
+
+                if mode in ['gap', 'skeleton']:
+                    if is_junk_filename(rel_path): continue
+                    final_content = remove_license_header(final_content)
+                    aggressive = (mode == 'skeleton')
+                    final_content = clean_content_deeply(final_content, file_ext, aggressive_mode=aggressive)
+                    if len(final_content.strip()) < 5: continue
+
+                # === 累加逻辑 ===
+                file_section = f"## File: {rel_path}\n\n```{ext_for_md}\n{final_content}\n```\n\n---\n\n"
+                total_content += file_section
+
+            except Exception as e:
+                print(f"Skipping {rel_path}: {e}")
+
+        # 4. 一次性写入文件
         with open(output_path, 'w', encoding='utf-8') as outfile:
-            # 1. 写入目录树 (新版 ASCII 风格)
-            outfile.write(self._generate_tree_text(start_path, selected_rels))
-
-            # 2. 写入报错日志 (如果有)
-            if error_log:
-                outfile.write("\n# 🛑 Compilation Error Log\n")
-                outfile.write("> Auto-detected from clipboard\n\n")
-                outfile.write("```text\n")
-                outfile.write(error_log)
-                outfile.write("\n```\n\n---\n\n")
-
-            # 3. 遍历并处理文件
-            for rel_path, full_path in file_items:
-                try:
-                    with open(full_path, 'r', encoding='utf-8', errors='ignore') as infile:
-                        content = infile.read()
-
-                    # === 清洗逻辑 ===
-                    final_content = content
-                    ext = os.path.splitext(rel_path)[1][1:] or 'text'
-
-                    if mode in ['gap', 'skeleton']:
-                        if is_junk_filename(rel_path): continue
-
-                        final_content = remove_license_header(final_content)
-                        aggressive = (mode == 'skeleton')
-                        final_content = clean_content_deeply(final_content, aggressive_mode=aggressive)
-
-                        if len(final_content.strip()) < 5: continue
-
-                    # === 写入逻辑 ===
-                    outfile.write(f"## File: {rel_path}\n\n")
-                    outfile.write(f"```{ext}\n{final_content}\n```\n\n---\n\n")
-
-                except Exception as e:
-                    print(f"Skipping {rel_path}: {e}")
+            outfile.write(total_content)
+        
+        return len(total_content)

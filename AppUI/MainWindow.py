@@ -1,35 +1,30 @@
 import os
-import sys
 import tkinter as tk
-from tkinter import filedialog, messagebox, font
-import subprocess
+from tkinter import filedialog, messagebox
 import threading
-import shutil  # 👈 记得导入 shutil
+import shutil
+import subprocess
+import ctypes
+
 from Core.ConfigLoader import load_config
 from Core.Analyzer import ProjectManager
 from .Tree import TreeBuilder
+from .Theme import COLORS, FONTS
+from .Components import RoundedFrame, RoundedButton
+from .Views import MainView
+from .SystemServices import (
+    set_win11_corners, 
+    SystemHotkeyService, 
+    SystemTrayService, 
+    StartupService, 
+    ExplorerService
+)
 
-# --- 配色方案 ---
-COLORS = {
-    "bg_main": "#1E1E1E",
-    "bg_panel": "#252526",
-    "fg_text": "#CCCCCC",
-    "fg_active": "#FFFFFF",
-    "fg_ignore": "#6E6E6E",
-    "accent": "#007ACC",
-    "accent_hov": "#0098FF",
-    "item_hover": "#37373D",
-    "folder_fg": "#C586C0",
-    "tree_lines": "#585858"
-}
-
-FONTS = {
-    "tree": ("Consolas", 12),
-    "ui": ("Microsoft YaHei UI", 11),
-    "ui_bold": ("Microsoft YaHei UI", 11, "bold"),
-    "h1": ("Microsoft YaHei UI", 14, "bold")
-}
-
+# --- Windows 高 DPI 感知 ---
+try:
+    ctypes.windll.shcore.SetProcessDpiAwareness(1)
+except Exception:
+    pass
 
 class CodeFeederApp:
     def __init__(self, root, initial_dir=None):
@@ -38,97 +33,107 @@ class CodeFeederApp:
         self.manager = ProjectManager(self.cfg)
 
         self.root.title(f"AI CodeFeeder - {self.cfg.version_info[0]}")
-        self.root.geometry("900x700")
+        self.root.geometry("1400x1000")
         self.root.configure(bg=COLORS["bg_main"])
-
+        
+        # 状态变量
+        self.is_topmost = False
         self.target_dir = initial_dir
         self.all_files_map = {}
         self.selection_state = {}
+        self.path_to_label = {}
         self.mode_var = tk.StringVar(value="normal")
-
-        # ✨ 新增：保存 TXT 的状态变量
         self.save_txt_var = tk.BooleanVar(value=False)
 
-        self.font_normal = font.Font(family="Consolas", size=12)
-        self.font_strike = font.Font(family="Consolas", size=12, overstrike=1)
+        # 初始化系统服务
+        self.hotkey_service = SystemHotkeyService(self._on_hotkey_triggered)
+        self.tray_service = SystemTrayService(
+            on_show=self._show_window,
+            on_quit=self._quit_app,
+            get_startup_status=StartupService.is_startup_enabled,
+            toggle_startup=self._toggle_startup
+        )
 
-        self._setup_ui()
+        # 设置 Win11 视觉效果
+        self.root.update()
+        set_win11_corners(ctypes.windll.user32.GetParent(self.root.winfo_id()))
+
+        # 构建 UI
+        self.view = MainView(self.root, self)
+        
+        # 快捷引用 view 中的组件
+        self.path_entry = self.view.path_entry
+        self.canvas = self.view.canvas
+        self.scroll_frame = self.view.scroll_frame
+        self.btn_gen = self.view.btn_gen
+        self.top_btn_canvas = self.view.top_btn_canvas
+        
+        # 启动服务
+        self.hotkey_service.start()
+        self.tray_service.start()
+
+        # 事件绑定
+        self.root.bind("<Return>", lambda e: self.on_generate_click())
+        self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
         if self.target_dir:
             self._update_path_display(self.target_dir)
             self.refresh_file_list()
 
-    def _setup_ui(self):
-        header = tk.Frame(self.root, bg=COLORS["bg_main"], pady=15, padx=20)
-        header.pack(fill=tk.X)
-        tk.Label(header, text="Project Path", bg=COLORS["bg_main"], fg=COLORS["fg_text"], font=FONTS["ui_bold"]).pack(
-            side=tk.LEFT)
+    def toggle_topmost(self):
+        self.is_topmost = not self.is_topmost
+        self.root.attributes("-topmost", self.is_topmost)
+        self.top_btn_canvas.config(fg=COLORS["accent"] if self.is_topmost else COLORS["fg_text"])
 
-        self.path_entry = tk.Entry(header, bg=COLORS["bg_panel"], fg=COLORS["fg_active"],
-                                   insertbackground="white", relief=tk.FLAT, font=FONTS["tree"])
-        self.path_entry.pack(side=tk.LEFT, padx=15, fill=tk.X, expand=True, ipady=4)
+    def _on_hotkey_triggered(self):
+        self.root.after(0, self._handle_hotkey)
 
-        self._create_flat_btn(header, "📂 Browse", self.browse_dir).pack(side=tk.LEFT, padx=5)
-        self._create_flat_btn(header, "🔄 Refresh", self.refresh_file_list).pack(side=tk.LEFT)
+    def _handle_hotkey(self):
+        path = ExplorerService.get_selected_path()
+        self._show_window()
+        self.root.lift()
+        self.root.attributes("-topmost", True)
+        self.root.after(100, lambda: self.root.attributes("-topmost", self.is_topmost))
+        self.root.focus_force()
 
-        tree_container = tk.Frame(self.root, bg=COLORS["bg_panel"], padx=2, pady=2)
-        tree_container.pack(fill=tk.BOTH, expand=True, padx=20, pady=(0, 10))
+        if path and os.path.exists(path):
+            self.target_dir = path
+            self._update_path_display(path)
+            self.refresh_file_list()
+        else:
+            messagebox.showinfo("快捷键触发", "已识别快捷键 Ctrl+`\n\n请确保当前已打开 Windows 资源管理器窗口，或选中了某个文件夹。")
 
-        hint_bar = tk.Frame(tree_container, bg=COLORS["bg_panel"], pady=5)
-        hint_bar.pack(fill=tk.X)
-        tk.Label(hint_bar, text="Project Tree Structure", bg=COLORS["bg_panel"], fg=COLORS["accent"],
-                 font=FONTS["ui_bold"]).pack(side=tk.LEFT, padx=10)
-        tk.Label(hint_bar, text="(Click file to Toggle)", bg=COLORS["bg_panel"], fg="#666", font=FONTS["ui"]).pack(
-            side=tk.RIGHT, padx=10)
+    def _toggle_startup(self, icon, item):
+        current_state = StartupService.is_startup_enabled()
+        new_state = not current_state
+        if StartupService.toggle_startup(new_state):
+            # 托盘菜单会自动通过 checked 逻辑更新状态
+            pass
 
-        self.canvas = tk.Canvas(tree_container, bg=COLORS["bg_panel"], highlightthickness=0)
-        scrollbar = tk.Scrollbar(tree_container, orient="vertical", command=self.canvas.yview, bg=COLORS["bg_panel"])
-        self.scroll_frame = tk.Frame(self.canvas, bg=COLORS["bg_panel"])
+    def _show_window(self):
+        self.root.after(0, self.root.deiconify)
 
-        self.scroll_frame.bind("<Configure>", lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all")))
-        self.canvas.create_window((0, 0), window=self.scroll_frame, anchor="nw")
-        self.canvas.configure(yscrollcommand=scrollbar.set)
+    def _on_close(self):
+        self.root.withdraw()
 
-        self.canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
-        self.canvas.bind_all("<MouseWheel>", self._on_mousewheel)
-
-        footer = tk.Frame(self.root, bg=COLORS["bg_main"], pady=15, padx=20)
-        footer.pack(fill=tk.X, side=tk.BOTTOM)
-
-        tk.Label(footer, text="Mode:", bg=COLORS["bg_main"], fg=COLORS["fg_text"], font=FONTS["ui"]).pack(side=tk.LEFT,
-                                                                                                          padx=(0, 10))
-        self._create_mode_radio(footer, "Normal", "normal")
-        self._create_mode_radio(footer, "Gap", "gap")
-        self._create_mode_radio(footer, "Skeleton", "skeleton")
-
-        self.btn_gen = tk.Button(footer, text="🚀 Generate Markdown", command=self.on_generate_click,
-                                 bg=COLORS["accent"], fg="white", activebackground=COLORS["accent_hov"],
-                                 font=("Microsoft YaHei UI", 11, "bold"), relief=tk.FLAT, padx=20, pady=5,
-                                 cursor="hand2")
-        self.btn_gen.pack(side=tk.RIGHT)
-
-        # ✨ 新增：同时保存为 TXT 的选项
-        chk_txt = tk.Checkbutton(footer, text="Also .txt", variable=self.save_txt_var,
-                                 bg=COLORS["bg_main"], fg=COLORS["fg_text"],
-                                 selectcolor=COLORS["bg_panel"], activebackground=COLORS["bg_main"],
-                                 activeforeground=COLORS["accent"], font=FONTS["ui"], cursor="hand2")
-        chk_txt.pack(side=tk.RIGHT, padx=10)
-
-    def _create_flat_btn(self, parent, text, command):
-        return tk.Button(parent, text=text, command=command, bg=COLORS["item_hover"], fg=COLORS["fg_text"],
-                         activebackground=COLORS["accent"], activeforeground="white", relief=tk.FLAT, font=FONTS["ui"],
-                         padx=10, pady=2, cursor="hand2")
-
-    def _create_mode_radio(self, parent, text, value):
-        tk.Radiobutton(parent, text=text, variable=self.mode_var, value=value,
-                       bg=COLORS["bg_main"], fg=COLORS["fg_text"], selectcolor=COLORS["bg_panel"],
-                       activebackground=COLORS["bg_main"], activeforeground=COLORS["accent"], font=FONTS["ui"],
-                       cursor="hand2").pack(side=tk.LEFT, padx=5)
+    def _quit_app(self):
+        self.tray_service.stop()
+        self.root.after(0, self.root.destroy)
 
     def _update_path_display(self, path):
         self.path_entry.delete(0, tk.END)
+        self.path_entry.config(fg=COLORS["fg_text"])
         self.path_entry.insert(0, path)
+
+    def _on_path_focus_in(self, event):
+        if self.path_entry.get() == "输入或选择项目路径...":
+            self.path_entry.delete(0, tk.END)
+            self.path_entry.config(fg=COLORS["fg_text"])
+
+    def _on_path_focus_out(self, event):
+        if not self.path_entry.get():
+            self.path_entry.insert(0, "输入或选择项目路径...")
+            self.path_entry.config(fg=COLORS["fg_secondary"])
 
     def _on_mousewheel(self, event):
         self.canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
@@ -142,26 +147,24 @@ class CodeFeederApp:
 
     def refresh_file_list(self):
         path = self.path_entry.get()
-        if not path or not os.path.exists(path):
-            return
+        if not path or not os.path.exists(path): return
 
         for w in self.scroll_frame.winfo_children(): w.destroy()
         self.all_files_map.clear()
         self.selection_state.clear()
+        self.path_to_label.clear()
 
         flat_files = self.manager.scan_directory(path)
         if not flat_files:
-            tk.Label(self.scroll_frame, text="No code files found.", bg=COLORS["bg_panel"], fg=COLORS["fg_ignore"],
-                     font=FONTS["ui"]).pack(pady=20)
+            tk.Label(self.scroll_frame, text="未找到相关代码文件。", bg=COLORS["bg_panel"], fg=COLORS["fg_secondary"],
+                     font=FONTS["ui"]).pack(pady=40)
             return
 
         visual_items = TreeBuilder.build_visual_data(flat_files)
-
         for item in visual_items:
             if item['type'] == 'file':
                 self.all_files_map[item['rel_path']] = item['full_path']
                 self.selection_state[item['rel_path']] = True
-
             self._create_tree_row(item)
 
     def _create_tree_row(self, item):
@@ -169,101 +172,135 @@ class CodeFeederApp:
         is_file = (item['type'] == 'file')
         rel_path = item.get('rel_path')
 
+        level = rel_path.count(os.sep) if rel_path else 0
+        indent_px = level * 48
+
         row_frame = tk.Frame(self.scroll_frame, bg=COLORS["bg_panel"])
-        row_frame.pack(fill=tk.X, expand=True)
+        row_frame.pack(fill=tk.X, pady=1)
 
-        fg_color = COLORS["fg_text"] if is_file else COLORS["folder_fg"]
-        if is_file: fg_color = COLORS["fg_active"]
+        spacer = None
+        if indent_px > 0:
+            spacer = tk.Frame(row_frame, bg=COLORS["bg_panel"], width=indent_px, height=34)
+            spacer.pack(side=tk.LEFT, fill=tk.Y)
 
-        lbl = tk.Label(row_frame, text=text, bg=COLORS["bg_panel"], fg=fg_color,
-                       font=self.font_normal, anchor="w", padx=10, pady=2)
-        lbl.pack(fill=tk.X, anchor="w")
+        icon_char = "📄" if is_file else "📁"
+        if is_file and text.endswith(".py"): icon_char = "🐍"
+        icon_color = COLORS["icon_file"] if is_file else COLORS["icon_folder"]
+        
+        icon_lbl = tk.Label(row_frame, text=icon_char, bg=COLORS["bg_panel"], fg=icon_color, 
+                            font=("Segoe UI Emoji", 12), width=3, anchor="center")
+        icon_lbl.pack(side=tk.LEFT)
 
-        if is_file:
-            def on_enter(e):
-                if self.selection_state[rel_path]:
-                    row_frame.config(bg=COLORS["item_hover"])
-                    lbl.config(bg=COLORS["item_hover"])
+        is_selected = self.selection_state.get(rel_path, True)
+        curr_font = FONTS["tree_norm"] if is_selected else FONTS["tree_strike"]
+        curr_fg = COLORS["fg_text"] if is_selected else COLORS["text_ignore"]
+        
+        if not is_file and not is_selected:
+            curr_fg = COLORS["text_ignore"]
+        elif not is_file:
+            curr_fg = COLORS["folder_fg"]
 
-            def on_leave(e):
-                row_frame.config(bg=COLORS["bg_panel"])
-                lbl.config(bg=COLORS["bg_panel"])
+        name_lbl = tk.Label(row_frame, text=item['name'], bg=COLORS["bg_panel"], fg=curr_fg, 
+                            font=curr_font, anchor="w")
+        name_lbl.pack(side=tk.LEFT, fill=tk.X, expand=True, pady=6)
 
-            def on_click(e):
-                curr = self.selection_state[rel_path]
-                new_state = not curr
-                self.selection_state[rel_path] = new_state
+        if rel_path:
+            self.path_to_label[rel_path] = {
+                "label": name_lbl, "frame": row_frame, "icon": icon_lbl,
+                "spacer": spacer, "is_file": is_file
+            }
 
-                if new_state:
-                    lbl.config(font=self.font_normal, fg=COLORS["fg_active"])
-                else:
-                    lbl.config(font=self.font_strike, fg=COLORS["fg_ignore"])
+        def toggle(e):
+            if is_file: self.on_toggle_file(rel_path)
+            else: self.on_toggle_folder(rel_path)
 
-            for w in (row_frame, lbl):
+        def on_enter(e):
+            for w in [row_frame, name_lbl, icon_lbl, spacer]:
+                if w: w.config(bg=COLORS["bg_hover"])
+
+        def on_leave(e):
+            for w in [row_frame, name_lbl, icon_lbl, spacer]:
+                if w: w.config(bg=COLORS["bg_panel"])
+
+        for w in [row_frame, name_lbl, icon_lbl, spacer]:
+            if w:
+                w.bind("<Button-1>", toggle)
                 w.bind("<Enter>", on_enter)
                 w.bind("<Leave>", on_leave)
-                w.bind("<Button-1>", on_click)
+
+    def on_toggle_file(self, rel_path):
+        new_state = not self.selection_state[rel_path]
+        self.selection_state[rel_path] = new_state
+        self._update_item_visual(rel_path, new_state)
+
+    def on_toggle_folder(self, rel_path):
+        affected_files = [p for p in self.all_files_map.keys() if p.startswith(rel_path + os.sep) or p == rel_path]
+        if not affected_files: return
+        any_selected = any(self.selection_state.get(p, False) for p in affected_files)
+        new_state = not any_selected
+        for p in affected_files:
+            self.selection_state[p] = new_state
+            self._update_item_visual(p, new_state)
+        if rel_path in self.path_to_label:
+             self._update_item_visual(rel_path, new_state)
+
+    def _update_item_visual(self, rel_path, is_selected):
+        widgets = self.path_to_label.get(rel_path)
+        if not widgets: return
+        lbl = widgets["label"]
+        icon_lbl = widgets["icon"]
+        is_file = widgets["is_file"]
+        
+        if is_selected:
+            # 恢复正常状态
+            icon_char = icon_lbl.cget("text")
+            icon_color = COLORS["icon_file"] if is_file else COLORS["icon_folder"]
+            icon_lbl.config(fg=icon_color)
+            lbl.config(font=FONTS["tree_norm"], fg=COLORS["fg_text"] if is_file else COLORS["folder_fg"])
         else:
-            pass
+            # 显眼的“已忽略”状态：图标变灰、文字删除线并变淡
+            icon_lbl.config(fg=COLORS["text_ignore"])
+            lbl.config(font=FONTS["tree_strike"], fg=COLORS["text_ignore"])
 
     def on_generate_click(self):
         path = self.path_entry.get()
         if not path: return
-
-        selected_items = []
-        for rel_path, is_selected in self.selection_state.items():
-            if is_selected:
-                full_path = self.all_files_map[rel_path]
-                selected_items.append((rel_path, full_path))
-
+        selected_items = [(r, self.all_files_map[r]) for r, s in self.selection_state.items() if s]
         if not selected_items:
-            messagebox.showwarning("Warning", "Select at least one file!")
+            messagebox.showwarning("提示", "请至少选择一个文件！")
             return
 
         mode = self.mode_var.get()
         suffix_map = {"normal": "_Codes.md", "gap": "_Gap.md", "skeleton": "_Skeleton.md"}
-        base_name = os.path.basename(path) or "Project"
-        default_name = f"{base_name}{suffix_map.get(mode, '_Codes.md')}"
+        
+        # 将生成路径修改为项目根目录的同级文件夹
+        parent_dir = os.path.dirname(os.path.normpath(path))
+        out_path = os.path.join(parent_dir, f"{os.path.basename(path)}{suffix_map.get(mode, '_Codes.md')}")
 
-        parent_dir = os.path.dirname(path)
-        save_dir = parent_dir if os.access(parent_dir, os.W_OK) else path
-        output_path = os.path.join(save_dir, default_name)
-
-        self.btn_gen.config(state=tk.DISABLED, text="Processing...", bg=COLORS["item_hover"])
-
-        error_log = None
-        try:
-            clip = self.root.clipboard_get()
-            if clip and clip.startswith("=" * 10):
-                error_log = clip
-        except:
-            pass
-
-        # ✨ 获取复选框状态
-        need_txt = self.save_txt_var.get()
-
+        self.btn_gen.config(state=tk.DISABLED, text="处理中...", bg=COLORS["bg_hover"])
+        
+        ignored_rels = [r for r, s in self.selection_state.items() if not s]
         threading.Thread(target=self._generate_thread,
-                         args=(path, selected_items, output_path, mode, error_log, need_txt)).start()
+                         args=(path, selected_items, out_path, mode, self.save_txt_var.get(), ignored_rels)).start()
 
-    def _generate_thread(self, root_path, items, out_path, mode, err_log, need_txt):
+    def _generate_thread(self, root_path, items, out_path, mode, need_txt, ignored_rels):
         try:
-            self.manager.pipeline_write(root_path, items, out_path, mode, err_log)
-
-            # ✨ 生成副本逻辑
-            if need_txt:
-                txt_path = os.path.splitext(out_path)[0] + ".txt"
-                shutil.copy2(out_path, txt_path)
-
-            self.root.after(0, lambda: self._on_success(out_path))
+            char_count = self.manager.pipeline_write(root_path, items, out_path, mode, None, ignored_rels)
+            if need_txt: shutil.copy2(out_path, os.path.splitext(out_path)[0] + ".txt")
+            token_count = int(char_count / 3.5)
+            self.root.after(0, lambda: self._on_success(out_path, token_count))
         except Exception as e:
             self.root.after(0, lambda: self._on_error(str(e)))
 
-    def _on_success(self, path):
-        self.btn_gen.config(state=tk.NORMAL, text="🚀 Generate Markdown", bg=COLORS["accent"])
-        messagebox.showinfo("Success", f"Saved to:\n{path}")
+    def _on_success(self, path, token_count):
+        self.btn_gen.config(state=tk.NORMAL, text="🚀 生成 Markdown", bg=COLORS["accent"])
+        messagebox.showinfo("生成成功", f"文件已保存至：\n{path}\n\n📊 预估 Token 总数: {token_count}")
         if os.name == 'nt':
-            subprocess.Popen(f'explorer /select,"{path}"')
+            try: subprocess.Popen(f'explorer /select,"{os.path.normpath(path)}"')
+            except: pass
+        # 生成结束后程序留在后台保持静默
+        self._on_close()
 
     def _on_error(self, msg):
-        self.btn_gen.config(state=tk.NORMAL, text="🚀 Generate Markdown", bg=COLORS["accent"])
-        messagebox.showerror("Error", msg)
+        self.btn_gen.config(state=tk.NORMAL, text="🚀 生成 Markdown", bg=COLORS["accent"])
+        messagebox.showerror("错误", msg)

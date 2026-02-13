@@ -1,5 +1,9 @@
 import os
 import sys
+
+# 将工作目录切换到脚本所在目录，确保资源加载正确
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
+
 import tkinter as tk
 # 确保导入的是 AppUI 包下的 MainWindow
 from AppUI.MainWindow import CodeFeederApp

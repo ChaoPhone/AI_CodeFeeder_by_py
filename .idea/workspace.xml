@@ -3,6 +3,14 @@
   <component name="ChangeListManager">
     <list default="true" id="1f55d84e-7179-4712-88dd-73102ebff85f" name="更改" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/AppUI/MainWindow.py" beforeDir="false" afterPath="$PROJECT_DIR$/AppUI/MainWindow.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/AppUI/Tree.py" beforeDir="false" afterPath="$PROJECT_DIR$/AppUI/Tree.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/CodeFeeder.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/Core/Analyzer.py" beforeDir="false" afterPath="$PROJECT_DIR$/Core/Analyzer.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Core/CodeCleaner.py" beforeDir="false" afterPath="$PROJECT_DIR$/Core/CodeCleaner.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Core/config.json" beforeDir="false" afterPath="$PROJECT_DIR$/Core/config.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/install_menu.py" beforeDir="false" afterPath="$PROJECT_DIR$/install_menu.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -12,38 +20,40 @@
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
-  <component name="GitHubPullRequestSearchHistory"><![CDATA[{
-  "lastFilter": {
-    "state": "OPEN",
-    "assignee": "ChaoPhone"
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;ChaoPhone&quot;
   }
-}]]></component>
-  <component name="GithubPullRequestsUISettings"><![CDATA[{
-  "selectedUrlAndAccountId": {
-    "url": "https://github.com/ChaoPhone/AI_CodeFeeder_by_py.git",
-    "accountId": "e5297fb7-d13e-4619-b0a7-e2c374f0f4dc"
+}</component>
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;https://github.com/ChaoPhone/AI_CodeFeeder_by_py.git&quot;,
+    &quot;accountId&quot;: &quot;e5297fb7-d13e-4619-b0a7-e2c374f0f4dc&quot;
   }
-}]]></component>
-  <component name="ProjectColorInfo"><![CDATA[{
-  "customColor": "",
-  "associatedIndex": 2
-}]]></component>
+}</component>
+  <component name="ProjectColorInfo">{
+  &quot;customColor&quot;: &quot;&quot;,
+  &quot;associatedIndex&quot;: 2
+}</component>
   <component name="ProjectId" id="39HZcWY0y7wHoirVNnGJniIomiT" />
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "Python.CodeFeeder.executor": "Run",
-    "Python.install_menu.executor": "Run",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "git-widget-placeholder": "main"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;Python.CodeFeeder.executor&quot;: &quot;Run&quot;,
+    &quot;Python.CodeFeeder.pyw.executor&quot;: &quot;Run&quot;,
+    &quot;Python.install_menu.executor&quot;: &quot;Run&quot;,
+    &quot;Python.uninstall_menu.executor&quot;: &quot;Run&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;
   }
-}]]></component>
+}</component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
