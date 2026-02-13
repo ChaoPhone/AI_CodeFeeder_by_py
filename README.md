@@ -120,8 +120,10 @@ AI_CodeFeeder/
 
 ***
 
-**V1.6.0** [架构重构版] Updated by **AI Assistant** on 2026.02.13
+**V1.6.0** [OMG版本] Updated by **ChaoPhone** with **Gemini 3 Pro** on 2026.02.13
+
 **V1.5.0** [GUI版本] Updated by **ChaoPhone** on 2026.02.06
+
 **V1.0.8** [MVP版本] Updated by **ChaoPhone** on 2026.01.18
 
 ---
