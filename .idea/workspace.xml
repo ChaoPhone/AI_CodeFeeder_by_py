@@ -2,6 +2,9 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="1f55d84e-7179-4712-88dd-73102ebff85f" name="更改" comment="">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/AppUI/SystemServices.py" beforeDir="false" afterPath="$PROJECT_DIR$/AppUI/SystemServices.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Core/config.json" beforeDir="false" afterPath="$PROJECT_DIR$/Core/config.json" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
