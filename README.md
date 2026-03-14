@@ -34,7 +34,11 @@
 
 ### 1. 环境准备
 
-确保电脑已安装 Python 3.x。
+确保电脑已安装 Python 3.x，并安装必要的依赖库：
+
+```bash
+pip install -r requirements.txt
+```
 
 ### 2. 首次安装（右键菜单集成）
 
@@ -50,10 +54,10 @@
 ### 3. 开始使用
 
 **方式 A：右键启动（推荐）**
-在任意代码文件夹上 **右键** -> 选择 **📂 使用 AI CodeFeeder 打开**。
+在任意**代码文件夹**或**单个文件**上 **右键** -> 选择 **📂 使用 AI CodeFeeder 打开**。程序将自动加载该路径。
 
 **方式 B：快捷键启动**
-按下 **Ctrl + `** (反引号，Esc 下方) 即可快速呼出程序。
+按下 **Ctrl + `** (反引号，Esc 下方) 即可快速呼出程序。如果在 Windows 资源管理器中已有选中的项，程序将尝试自动加载该路径。
 
 **方式 C：直接运行**
 双击运行 `CodeFeeder.pyw`。
@@ -97,8 +101,21 @@ AI_CodeFeeder/
 │   ├── ConfigLoader.py    # 配置加载器
 │   └── config.json        # [配置] 用户自定义规则
 ├── install_menu.py        # 右键菜单/自启动注册脚本
-└── uninstall_menu.py      # 菜单/自启动卸载脚本
+├── uninstall_menu.py      # 菜单/自启动卸载脚本
+├── requirements.txt       # 项目依赖
+└── .gitignore             # Git 忽略规则
 ```
+
+***
+
+## 🔍 故障排除 (Debug)
+
+如果程序运行出现问题，可以按以下步骤排查：
+
+1.  **检查日志**：如果 `.pyw` 运行没有反应，请查看脚本同目录下的 `launch_error.log`。
+2.  **右键菜单无效**：请重新运行 `python install_menu.py`（需管理员权限），脚本会自动覆盖旧的注册表项。
+3.  **快捷键冲突**：如果 `Ctrl + ` ` 被占用，可以在 `AppUI/SystemServices.py` 中修改 `self.hotkey`。
+4.  **手动运行**：在 CMD 中运行 `python CodeFeeder.pyw`，可以直接在控制台看到所有输出和报错信息。
 
 ***
 
