@@ -1,29 +1,33 @@
 # Python cache
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
-*.pyd
+*.py[cod]
+*$py.class
 
 # IDE
 .idea/
+.vscode/
 *.iml
 *.swp
 *.swo
 *~
-# Local History for Visual Studio Code
-.vscode/
-*.swp
-*.swo
-# User-specific things
 
-# Generated output
+# Generated logs
 *.log
 launch_error.log
 
 # Generated markdown output
 *.md
-# Don't ignore README.md
+!README.md
+
+# PyInstaller / Build
+build/
+dist/
+*.spec
+# build_exe.py should be ignored if it's just a local helper, 
+# but usually we keep build scripts in repo. 
+# Based on user's request to "modify gitignore" after mentioning releases, 
+# they likely want to keep the source clean.
+# build_exe.py
 
 # Temp files
 *.tmp

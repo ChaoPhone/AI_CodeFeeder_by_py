@@ -16,6 +16,18 @@
 
 祝看到这里的同学期末周科科满绩！！！送你一锅重庆鸡公煲🫕🥰🥰🥰
 
+## 🚀 快速开始 (推荐)
+
+**无需安装 Python，直接使用已打包好的 EXE 文件：**
+
+1.  **下载**：前往 [GitHub Releases](https://github.com/ChaoPhone/AI_CodeFeeder/releases) 下载最新的 `AICodeFeeder.exe` 和 `Install_Menu.exe`。
+2.  **安装右键菜单**：运行 `Install_Menu.exe`。它会自动请求管理员权限，并将工具集成到系统右键菜单中。
+3.  **开始使用**：
+    *   **右键启动**：在任意代码文件夹或单个文件上 **右键** -> 选择 **📂 使用 AI CodeFeeder 打开**。
+    *   **快捷键启动**：按下 **Ctrl + `** (反引号) 即可快速呼出程序。
+
+***
+
 ## 📖 简介
 
 **众所周知，大多数 AI（如 DeepSeek, 豆包, ChatGPT, Claude, Gemini）不允许直接上传代码文件夹。**
@@ -30,7 +42,9 @@
 
 ***
 
-## 🛠️ 使用步骤
+## 🛠️ 源码运行 (Python)
+
+如果你想通过 Python 源码运行或进行二次开发：
 
 ### 1. 环境准备
 
@@ -40,9 +54,7 @@
 pip install -r requirements.txt
 ```
 
-### 2. 首次安装（右键菜单集成）
-
-为了获得最佳体验，建议运行注册脚本，将工具集成到系统右键菜单：
+### 2. 注册右键菜单
 
 1. **以管理员身份**运行 CMD 或 PowerShell。
 2. 进入项目根目录，运行：
@@ -51,16 +63,9 @@ pip install -r requirements.txt
    ```
 3. 脚本会自动请求权限并完成右键菜单及开机自启动的注册。
 
-### 3. 开始使用
+### 3. 直接启动
 
-**方式 A：右键启动（推荐）**
-在任意**代码文件夹**或**单个文件**上 **右键** -> 选择 **📂 使用 AI CodeFeeder 打开**。程序将自动加载该路径。
-
-**方式 B：快捷键启动**
-按下 **Ctrl + `** (反引号，Esc 下方) 即可快速呼出程序。如果在 Windows 资源管理器中已有选中的项，程序将尝试自动加载该路径。
-
-**方式 C：直接运行**
-双击运行 `CodeFeeder.pyw`。
+双击运行 `CodeFeeder.pyw` 或在终端运行 `python CodeFeeder.pyw`。
 
 ***
 
@@ -102,6 +107,7 @@ AI_CodeFeeder/
 │   └── config.json        # [配置] 用户自定义规则
 ├── install_menu.py        # 右键菜单/自启动注册脚本
 ├── uninstall_menu.py      # 菜单/自启动卸载脚本
+├── build_exe.py           # [工具] 打包脚本
 ├── requirements.txt       # 项目依赖
 └── .gitignore             # Git 忽略规则
 ```
@@ -127,6 +133,26 @@ AI_CodeFeeder/
 * **`ignore_dirs`**: 递归扫描时强制跳过的文件夹（如 `.git`, `node_modules`）。
 * **`ignore_prefixes`**: 针对特定开发环境（如 STM32）忽略特定前缀的自动生成文件。
 * **`ignore_files`**: 精确忽略特定的文件名。
+
+***
+
+## 📦 打包与分发 (Developer)
+
+如果你想将项目打包成独立的 EXE 文件以便在没有 Python 环境的电脑上运行：
+
+1. **安装打包工具**：
+   ```bash
+   pip install pyinstaller
+   ```
+2. **运行打包脚本**：
+   ```bash
+   python build_exe.py
+   ```
+3. **获取生成物**：
+   - `dist/AICodeFeeder.exe`：主程序（单文件，无窗口）。
+   - `dist/Install_Menu.exe`：安装程序（自动请求管理员权限，配置右键菜单）。
+
+> **注意**：分发给他人时，建议同时发送这两个文件。用户只需运行一次 `Install_Menu.exe` 即可完成所有配置。
 
 ***
 
