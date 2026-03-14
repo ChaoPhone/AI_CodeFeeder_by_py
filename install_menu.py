@@ -12,58 +12,83 @@ def is_admin():
 
 
 def register_context_menu():
+    print("🔍 正在检测环境...")
     # 更健壮的 pythonw.exe 获取
     python_exe = sys.executable
-    if python_exe.endswith("python.exe"):
-        pythonw = python_exe.replace("python.exe", "pythonw.exe")
+    # 尝试寻找 pythonw.exe 以避免控制台窗口
+    if python_exe.lower().endswith("python.exe"):
+        pythonw = python_exe[:-4] + "w.exe"
         if os.path.exists(pythonw):
             python_exe = pythonw
+            print(f"✅ 已找到无窗口运行环境: {python_exe}")
+        else:
+            print(f"⚠️ 未找到 pythonw.exe，将使用 python.exe (会有控制台窗口)")
     
     # 获取脚本的可靠路径
     script_dir = os.path.dirname(os.path.abspath(__file__))
     script_path = os.path.join(script_dir, "CodeFeeder.pyw")
     if not os.path.exists(script_path):
         script_path = os.path.join(script_dir, "CodeFeeder.py")
+        if not os.path.exists(script_path):
+             print(f"❌ 严重错误：找不到脚本文件 CodeFeeder.pyw 或 CodeFeeder.py")
+             return
 
     menu_name = "📂 使用 AI CodeFeeder 打开"
-    # 注册范围：文件夹、目录背景（右键空白处）、所有文件
-    reg_paths = [r"Directory\shell", r"Directory\Background\shell", r"*\shell"]
     key_name = "AI_CodeFeeder_Pipeline"
 
-    # --- 1. 定义两个不同的命令 ---
-    # 【右键菜单命令】：必须带 "%V" 以获取选中的目录
-    context_menu_cmd = f'"{python_exe}" "{script_path}" "%V"'
-    # 【开机自启命令】：绝不能带 "%V"
+    # 定义注册表路径和对应的参数
+    # Directory\shell: 文件夹右键，%V 代表路径
+    # Directory\Background\shell: 文件夹空白处右键，%V 代表当前路径
+    # *\shell: 文件右键，%1 代表文件路径
+    reg_configs = [
+        (r"Directory\shell", '"%V"'),
+        (r"Directory\Background\shell", '"%V"'),
+        (r"*\shell", '"%1"')
+    ]
+
+    # 【开机自启命令】：绝不能带 "%V" 或 "%1"
     startup_cmd = f'"{python_exe}" "{script_path}"'
     
-    # 添加调试输出
     print(f"调试：安装时的自启命令 = {startup_cmd}")
 
     try:
-        for base in reg_paths:
+        success_count = 0
+        for base, arg in reg_configs:
             key_path = f"{base}\\{key_name}"
-            with winreg.CreateKey(winreg.HKEY_CLASSES_ROOT, key_path) as key:
-                winreg.SetValue(key, "", winreg.REG_SZ, menu_name)
-                winreg.SetValueEx(key, "Icon", 0, winreg.REG_SZ, python_exe)
+            # 构建针对该类型的命令
+            cmd_str = f'"{python_exe}" "{script_path}" {arg}'
+            
+            try:
+                # 创建/打开主键
+                with winreg.CreateKey(winreg.HKEY_CLASSES_ROOT, key_path) as key:
+                    winreg.SetValue(key, "", winreg.REG_SZ, menu_name)
+                    winreg.SetValueEx(key, "Icon", 0, winreg.REG_SZ, python_exe)
 
-            with winreg.CreateKey(winreg.HKEY_CLASSES_ROOT, f"{key_path}\\command") as key:
-                # 修复点：这里使用 context_menu_cmd
-                winreg.SetValue(key, "", winreg.REG_SZ, context_menu_cmd)
+                # 创建/打开 command 子键
+                with winreg.CreateKey(winreg.HKEY_CLASSES_ROOT, f"{key_path}\\command") as key:
+                    winreg.SetValue(key, "", winreg.REG_SZ, cmd_str)
+                
+                print(f"✅ 注册成功: {base} -> {cmd_str}")
+                success_count += 1
+            except Exception as e:
+                print(f"❌ 注册失败 ({base}): {e}")
 
-        print(f"✅ 成功！右键菜单已更新。\n指向脚本: {script_path}")
+        if success_count > 0:
+            print(f"\n✅ 右键菜单更新完成！(成功 {success_count}/{len(reg_configs)})")
+        else:
+            print("\n❌ 所有注册表项均写入失败，请检查权限或杀毒软件拦截。")
         
         # --- 添加开机自启动注册逻辑 ---
         try:
             startup_key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
             with winreg.OpenKey(winreg.HKEY_CURRENT_USER, startup_key_path, 0, winreg.KEY_SET_VALUE) as key:
-                # 修复点：这里使用 startup_cmd (去掉 %V)
                 winreg.SetValueEx(key, "AICodeFeeder", 0, winreg.REG_SZ, startup_cmd)
             print("✅ 成功！已添加开机自启动。")
         except Exception as startup_e:
             print(f"⚠️ 开机自启动设置失败: {startup_e}")
 
     except Exception as e:
-        print(f"❌ 注册失败: {e}")
+        print(f"❌ 发生未预期的错误: {e}")
 
 
 if __name__ == "__main__":

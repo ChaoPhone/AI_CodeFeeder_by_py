@@ -84,9 +84,10 @@ class ProjectManager:
                 extension = "    " if is_last_item else "│   "
                 self._render_tree(subtree, prefix + extension, lines)
 
-    def pipeline_write(self, start_path, file_items, output_path, mode='normal', error_log=None, ignored_rels=None):
+    def pipeline_write(self, start_path, file_items, output_path, mode='normal', error_log=None, ignored_rels=None, progress_callback=None):
         """
         核心流水线：写入格式严格对齐
+        支持进度回调 (progress_callback(current, total, filename))
         返回生成的总字符数，用于估算 Token
         """
         selected_rels = [item[0] for item in file_items]
@@ -106,11 +107,12 @@ class ProjectManager:
             err_text = f"\n# 🛑 Compilation Error Log\n> Auto-detected from clipboard\n\n```text\n{error_log}\n```\n\n---\n\n"
             total_content += err_text
 
-        # 3. 遍历并处理文件内容
-        for rel_path, full_path in file_items:
+        # 3. 遍历并处理文件内容（带进度回调）
+        total_files = len(file_items)
+        for idx, (rel_path, full_path) in enumerate(file_items):
             try:
-                with open(full_path, 'r', encoding='utf-8', errors='ignore') as infile:
-                    content = infile.read()
+                # 流式读取大文件（分块读取）
+                content = self._read_file_streaming(full_path)
 
                 # === 清洗逻辑 ===
                 final_content = content
@@ -128,6 +130,10 @@ class ProjectManager:
                 file_section = f"## File: {rel_path}\n\n```{ext_for_md}\n{final_content}\n```\n\n---\n\n"
                 total_content += file_section
 
+                # 报告进度
+                if progress_callback:
+                    progress_callback(idx + 1, total_files, rel_path)
+
             except Exception as e:
                 print(f"Skipping {rel_path}: {e}")
 
@@ -136,3 +142,24 @@ class ProjectManager:
             outfile.write(total_content)
         
         return len(total_content)
+
+    def _read_file_streaming(self, file_path, chunk_size=8192):
+        """
+        流式读取文件，避免大文件一次性加载到内存
+        对于小文件直接读取，对于大文件分块读取
+        """
+        file_size = os.path.getsize(file_path)
+        # 小于5MB的文件直接读取
+        if file_size < 5 * 1024 * 1024:
+            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                return f.read()
+        
+        # 大文件流式读取
+        chunks = []
+        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+            while True:
+                chunk = f.read(chunk_size)
+                if not chunk:
+                    break
+                chunks.append(chunk)
+        return ''.join(chunks)

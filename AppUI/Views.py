@@ -1,4 +1,5 @@
 import tkinter as tk
+from tkinter import ttk
 from .Theme import COLORS, FONTS, UI_FONT_FAMILY
 from .Components import RoundedFrame, RoundedButton
 
@@ -13,10 +14,14 @@ class MainView:
         self.scroll_frame = None
         self.btn_gen = None
         self.top_btn_canvas = None
+        self.progress_bar = None  # 进度条引用
         self.mode_var = controller.mode_var
         self.save_txt_var = controller.save_txt_var
         
         self._setup_ui()
+        
+        # 将进度条引用传递给controller
+        self.controller.progress_bar = self.progress_bar
 
     def _setup_ui(self):
         # --- 顶部工具栏 ---
@@ -29,6 +34,8 @@ class MainView:
 
         RoundedButton(btn_group, "浏览", self.controller.browse_dir, width=70).pack(side=tk.LEFT, padx=5)
         RoundedButton(btn_group, "刷新", self.controller.refresh_file_list, width=70).pack(side=tk.LEFT, padx=5)
+        self.controller.whitelist_btn = RoundedButton(btn_group, "白名单", self.controller.toggle_whitelist_mode, width=80, bg=COLORS["bg_hover"])
+        self.controller.whitelist_btn.pack(side=tk.LEFT, padx=5)
         self.top_btn_canvas = RoundedButton(btn_group, "📌", self.controller.toggle_topmost, width=40)
         self.top_btn_canvas.pack(side=tk.LEFT, padx=5)
 
@@ -91,16 +98,22 @@ class MainView:
         action_group = tk.Frame(footer, bg=COLORS["bg_main"])
         action_group.pack(side=tk.RIGHT)
 
-        tk.Checkbutton(action_group, text="同步生成txt", variable=self.save_txt_var,
-                       bg=COLORS["bg_main"], fg=COLORS["fg_text"],
-                       selectcolor=COLORS["bg_panel"], activebackground=COLORS["bg_main"],
-                       activeforeground=COLORS["accent"], font=FONTS["ui"], cursor="hand2").pack(side=tk.LEFT, padx=15)
+        # 进度条（默认隐藏）
+        self.progress_bar = tk.ttk.Progressbar(action_group, variable=self.controller.progress_var, 
+                                               maximum=100, mode='determinate', length=150)
+        # 默认隐藏进度条
+        self.progress_bar.pack_forget()
 
         self.btn_gen = RoundedButton(action_group, "🚀 生成 Markdown", self.controller.on_generate_click,
                                     bg=COLORS["accent"], hover_bg=COLORS["accent_hov"],
                                     radius=COLORS["radius_btn"],
                                     font=FONTS["h1"], padding_x=50, padding_y=12)
-        self.btn_gen.pack(side=tk.LEFT)
+        self.btn_gen.pack(side=tk.LEFT, padx=10)
+
+        tk.Checkbutton(action_group, text="同步生成txt", variable=self.save_txt_var,
+                       bg=COLORS["bg_main"], fg=COLORS["fg_text"],
+                       selectcolor=COLORS["bg_panel"], activebackground=COLORS["bg_main"],
+                       activeforeground=COLORS["accent"], font=FONTS["ui"], cursor="hand2").pack(side=tk.LEFT, padx=15)
 
     def _create_modern_radio(self, parent, text, value):
         tk.Radiobutton(parent, text=text, variable=self.mode_var, value=value,

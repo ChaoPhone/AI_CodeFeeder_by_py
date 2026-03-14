@@ -1,9 +1,9 @@
 
 ***
 
-# 🚀 AI_CodeFeeder (V1.6.1 ctrl+`极速版！)
+# 🚀 AI_CodeFeeder (V1.6.2 ctrl+`极速版！)
 
-![Version](https://img.shields.io/badge/version-1.6.1-blue.svg)
+![Version](https://img.shields.io/badge/version-1.6.2-blue.svg)
 ![Build](https://img.shields.io/badge/build-passing-brightgreen.svg)
 ![Python](https://img.shields.io/badge/python-3.x-blue.svg)
 ![Tkinter](https://img.shields.io/badge/UI-Tkinter-orange.svg)
@@ -60,8 +60,11 @@
 
 ***
 
-## ✨ V1.6.1 新版特性
+## ✨ V1.6.2 新版特性
 
+* **🔧 跨环境兼容性增强**：修复了在其他 Windows 电脑上注册表注册失败的问题，优化了右键菜单对不同类型（文件夹/文件）的参数处理
+* **📝 启动错误日志记录**：增加了全局异常捕获和日志记录功能，解决 .pyw 文件无响应问题，错误信息会记录到 `launch_error.log` 文件中
+* **🔄 改进的 pythonw.exe 检测**：更智能地查找无窗口运行环境，提升跨环境兼容性
 * **🏗️ 分层模块化架构**：将代码重构为 UI 层、系统层和业务逻辑层。告别 500+ 行的“上帝类”，代码更清晰，扩展更简单。
 * **🌙 现代深色主题 (VS Code 风格)**：采用更加细腻的配色方案，支持自定义圆角按钮和分栏框，视觉体验更统一。
 * **🌳 深度优化的目录树**：
@@ -112,13 +115,19 @@ AI_CodeFeeder/
 
 ## 👨‍💻 版本与作者
 
-**AI_CodeFeeder V1.6.1 (Refactor Edition)**
+**AI_CodeFeeder V1.6.2 (BugFix Edition)**
 
 * **Original Author**: ChaoPhone
 * **Refactored By**: AI Assistant & User
-* **Last Update**: 2026/02/14
+* **Last Update**: 2026/03/14
 
 ***
+
+**V1.6.2** [BugFix版本] Updated by **ChaoPhone** on 2026.03.14
+* 修复了在其他 Windows 电脑上注册表注册失败的问题
+* 优化了右键菜单对不同类型（文件夹/文件）的参数处理
+* 增加了启动错误日志记录功能，解决 .pyw 文件无响应问题
+* 改进了 pythonw.exe 的检测逻辑，提升跨环境兼容性
 
 **V1.6.1** [OMG版本] Updated by **ChaoPhone** with **Gemini 3 Pro** on 2026.02.14
 

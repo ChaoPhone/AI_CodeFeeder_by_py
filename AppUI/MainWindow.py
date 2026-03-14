@@ -44,6 +44,8 @@ class CodeFeederApp:
         self.path_to_label = {}
         self.mode_var = tk.StringVar(value="normal")
         self.save_txt_var = tk.BooleanVar(value=False)
+        self.whitelist_mode = False  # 白名单模式：默认全部不选中
+        self.progress_var = tk.IntVar(value=0)  # 进度条变量
 
         # 初始化系统服务
         self.hotkey_service = SystemHotkeyService(self._on_hotkey_triggered)
@@ -84,6 +86,29 @@ class CodeFeederApp:
         self.is_topmost = not self.is_topmost
         self.root.attributes("-topmost", self.is_topmost)
         self.top_btn_canvas.config(fg=COLORS["accent"] if self.is_topmost else COLORS["fg_text"])
+
+    def toggle_whitelist_mode(self):
+        """白名单模式：点击后所有文件默认不选中，用户手动勾选"""
+        self.whitelist_mode = not self.whitelist_mode
+        # 更新按钮状态
+        if hasattr(self, 'whitelist_btn'):
+            if self.whitelist_mode:
+                self.whitelist_btn.config(bg=COLORS["accent"], text="✓ 白名单")
+            else:
+                self.whitelist_btn.config(bg=COLORS["bg_hover"], text="白名单")
+        
+        # 根据模式设置初始选中状态
+        new_default = not self.whitelist_mode  # 白名单模式=False，普通=True
+        for rel_path in self.selection_state:
+            self.selection_state[rel_path] = new_default
+        # 刷新UI
+        self._refresh_tree_visual()
+
+    def _refresh_tree_visual(self):
+        """刷新树的视觉状态"""
+        for rel_path, widgets in self.path_to_label.items():
+            is_selected = self.selection_state.get(rel_path, False)
+            self._update_item_visual(rel_path, is_selected)
 
     def _on_hotkey_triggered(self):
         self.root.after(0, self._handle_hotkey)
@@ -279,13 +304,24 @@ class CodeFeederApp:
 
         self.btn_gen.config(state=tk.DISABLED, text="处理中...", bg=COLORS["bg_hover"])
         
+        # 显示进度条
+        if self.progress_bar:
+            self.progress_bar.pack(side=tk.LEFT, padx=10)
+            self.progress_var.set(0)
+        
         ignored_rels = [r for r, s in self.selection_state.items() if not s]
+        
+        # 创建进度回调函数
+        def progress_callback(current, total, filename):
+            percent = int((current / total) * 100)
+            self.root.after(0, lambda: self.progress_var.set(percent))
+        
         threading.Thread(target=self._generate_thread,
-                         args=(path, selected_items, out_path, mode, self.save_txt_var.get(), ignored_rels)).start()
+                         args=(path, selected_items, out_path, mode, self.save_txt_var.get(), ignored_rels, progress_callback)).start()
 
-    def _generate_thread(self, root_path, items, out_path, mode, need_txt, ignored_rels):
+    def _generate_thread(self, root_path, items, out_path, mode, need_txt, ignored_rels, progress_callback=None):
         try:
-            char_count = self.manager.pipeline_write(root_path, items, out_path, mode, None, ignored_rels)
+            char_count = self.manager.pipeline_write(root_path, items, out_path, mode, None, ignored_rels, progress_callback)
             if need_txt: shutil.copy2(out_path, os.path.splitext(out_path)[0] + ".txt")
             token_count = int(char_count / 3.5)
             self.root.after(0, lambda: self._on_success(out_path, token_count))
@@ -294,13 +330,18 @@ class CodeFeederApp:
 
     def _on_success(self, path, token_count):
         self.btn_gen.config(state=tk.NORMAL, text="🚀 生成 Markdown", bg=COLORS["accent"])
+        # 隐藏进度条
+        if self.progress_bar:
+            self.progress_bar.pack_forget()
         messagebox.showinfo("生成成功", f"文件已保存至：\n{path}\n\n📊 预估 Token 总数: {token_count}")
-        if os.name == 'nt':
-            try: subprocess.Popen(f'explorer /select,"{os.path.normpath(path)}"')
-            except: pass
+        # 生成后不自动打开目录（用户已知文件位置）
+        # 删除原有 explorer 逻辑，避免重复打开目录
         # 生成结束后程序留在后台保持静默
         self._on_close()
 
     def _on_error(self, msg):
         self.btn_gen.config(state=tk.NORMAL, text="🚀 生成 Markdown", bg=COLORS["accent"])
+        # 隐藏进度条
+        if self.progress_bar:
+            self.progress_bar.pack_forget()
         messagebox.showerror("错误", msg)
