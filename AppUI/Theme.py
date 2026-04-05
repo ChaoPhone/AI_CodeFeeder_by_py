@@ -6,6 +6,7 @@ BASE_FONT_SIZE = 11
 
 FONTS = {
     "h1": (UI_FONT_FAMILY, 14, "bold"),
+    "h2": (UI_FONT_FAMILY, 13, "bold"),
     "ui": (UI_FONT_FAMILY, 10),
     "ui_bold": (UI_FONT_FAMILY, 10, "bold"),
     "tree_norm": (UI_FONT_FAMILY, BASE_FONT_SIZE),

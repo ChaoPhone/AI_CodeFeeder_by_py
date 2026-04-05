@@ -50,6 +50,91 @@ except ImportError:
     PIL_IMPORT_ERROR = str(sys.exc_info()[1] or "")
 
 
+# 单实例互斥锁名称
+SINGLE_INSTANCE_MUTEX_NAME = "Global\\AICodeFeeder_SingleInstance_v1_8_0"
+
+
+class SingleInstanceService:
+    """单实例检测服务 - 使用 Windows 互斥锁"""
+
+    def __init__(self):
+        self.mutex_handle = None
+        self.is_first_instance = False
+
+    def try_acquire(self):
+        """
+        尝试获取单实例锁
+        返回 True 表示是第一个实例，False 表示已有其他实例运行
+        """
+        if not HAS_PYWIN32:
+            # 没有 pywin32 时无法检测，默认允许运行
+            return True
+
+        try:
+            self.mutex_handle = win32api.CreateMutex(
+                None,
+                False,
+                SINGLE_INSTANCE_MUTEX_NAME
+            )
+            # 检查是否已存在
+            last_error = win32api.GetLastError()
+            # ERROR_ALREADY_EXISTS = 183
+            if last_error == 183:
+                self.is_first_instance = False
+                return False
+            else:
+                self.is_first_instance = True
+                return True
+        except Exception:
+            # 异常情况下允许运行
+            return True
+
+    def release(self):
+        """释放互斥锁"""
+        if self.mutex_handle and self.is_first_instance:
+            try:
+                win32api.CloseHandle(self.mutex_handle)
+            except Exception:
+                pass
+        self.mutex_handle = None
+
+    def notify_existing_instance(self):
+        """
+        通知已存在的实例显示窗口
+        通过查找并激活现有窗口实现
+        """
+        try:
+            # 尝试找到现有窗口并激活
+            hwnd = ctypes.windll.user32.FindWindowW(None, None)
+            # 通过窗口标题查找
+            target_title_prefix = "AI CodeFeeder"
+            ctypes.windll.user32.EnumWindows(
+                ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)(
+                    lambda hwnd, lParam: self._find_and_activate_window(hwnd, target_title_prefix)
+                ),
+                0
+            )
+        except Exception:
+            pass
+
+    def _find_and_activate_window(self, hwnd, target_prefix):
+        """查找并激活目标窗口"""
+        try:
+            length = ctypes.windll.user32.GetWindowTextLengthW(hwnd)
+            if length > 0:
+                buffer = ctypes.create_unicode_buffer(length + 1)
+                ctypes.windll.user32.GetWindowTextW(hwnd, buffer, length + 1)
+                title = buffer.value
+                if title.startswith(target_prefix):
+                    # 找到了，激活窗口
+                    ctypes.windll.user32.SetForegroundWindow(hwnd)
+                    ctypes.windll.user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+                    return False  # 停止枚举
+        except Exception:
+            pass
+        return True  # 继续枚举
+
+
 def is_frozen_exe():
     return getattr(sys, 'frozen', False)
 

@@ -1,32 +1,78 @@
 {
   "allowed_extensions": [
-    ".py", ".pyw", ".java", ".cpp", ".c", ".h", ".hpp", ".js", ".ts", ".html", ".css",
-    ".sql", ".yaml", ".yml", ".xml", ".json", ".md", ".txt", ".cs",
-    ".shader", ".compute", ".cginc", ".go", ".rs", ".lua"
+    ".py",
+    ".pyw",
+    ".java",
+    ".cpp",
+    ".c",
+    ".h",
+    ".hpp",
+    ".js",
+    ".ts",
+    ".html",
+    ".css",
+    ".sql",
+    ".yaml",
+    ".yml",
+    ".xml",
+    ".json",
+    ".md",
+    ".txt",
+    ".cs",
+    ".shader",
+    ".compute",
+    ".cginc",
+    ".go",
+    ".rs",
+    ".lua"
   ],
-
   "ignore_dirs": [
-    ".git", ".idea", ".vscode", "__pycache__", "venv", "env", "node_modules", ".DS_Store",
-    "build", "dist", "bin", "obj", "target",
-    "gradle", ".gradle", "Library", "Temp", "Logs", "UserSettings",
-    "Drivers", "Middlewares", "CMSIS", "MDK-ARM", "EWARM", "DebugVals", "Docs", "Doc"
+    ".git",
+    ".idea",
+    ".vscode",
+    "__pycache__",
+    "venv",
+    "env",
+    "node_modules",
+    ".DS_Store",
+    "build",
+    "dist",
+    "bin",
+    "obj",
+    "target",
+    "gradle",
+    ".gradle",
+    "Library",
+    "Temp",
+    "Logs",
+    "UserSettings",
+    "Drivers",
+    "Middlewares",
+    "CMSIS",
+    "MDK-ARM",
+    "EWARM",
+    "DebugVals",
+    "Docs",
+    "Doc"
   ],
-
   "ignore_prefixes": [
-    "system_stm32", "stm32f4xx_hal_conf",
-    "stm32f4xx_hal_msp", "sysmem", "syscalls", "FreeRTOSConfig",
-    "jquery", "bootstrap"
+    "system_stm32",
+    "stm32f4xx_hal_conf",
+    "stm32f4xx_hal_msp",
+    "sysmem",
+    "syscalls",
+    "FreeRTOSConfig",
+    "jquery",
+    "bootstrap"
   ],
-
   "ignore_files": [
     "package-lock.json",
     "yarn.lock"
   ],
-
   "default_mode": "normal",
   "full_load_timeout_seconds": 5,
   "full_load_max_files": 2500,
-
+  "save_txt": true,
   "version": [
     "v1.8.0",
     "单文件版"

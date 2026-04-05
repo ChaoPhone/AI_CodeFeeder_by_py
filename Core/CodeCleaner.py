@@ -5,35 +5,24 @@ def hollow_out_function_bodies(content):
     """
     【骨架模式核心】保留结构，掏空实现
     基于大括号计数 ({ count })
+    使用正则预处理移除字符串字面量，避免转义判断复杂度
     """
+    # 1. 预处理：移除所有字符串和字符字面量（用占位符替代）
+    # 这样可以安全地处理括号匹配，不用担心字符串内的转义
+    def replace_string(match):
+        # 根据字符串长度返回相同长度的空格占位符，保持结构
+        return ' ' * len(match.group(0))
+
+    # 移除双引号字符串（包括转义的内容）
+    content = re.sub(r'"(?:[^"\\]|\\.)*"', replace_string, content)
+    # 移除单引号字符串（包括转义的内容）
+    content = re.sub(r"'(?:[^'\\]|\\.)*'", replace_string, content)
+
+    # 2. 大括号计数逻辑（现在字符串已移除，逻辑简单）
     output = []
-    i = 0
-    length = len(content)
     brace_depth = 0
-    in_string = False
-    in_char = False
 
-    while i < length:
-        char = content[i]
-
-        # 1. 简单的字符串跳过逻辑
-        if char == '"' and (i == 0 or content[i - 1] != '\\'):
-            in_string = not in_string
-            output.append(char)
-            i += 1
-            continue
-        if char == "'" and (i == 0 or content[i - 1] != '\\'):
-            in_char = not in_char
-            output.append(char)
-            i += 1
-            continue
-
-        if in_string or in_char:
-            output.append(char)
-            i += 1
-            continue
-
-        # 2. 大括号逻辑
+    for char in content:
         if char == '{':
             if brace_depth == 0:
                 output.append('{')
@@ -46,9 +35,7 @@ def hollow_out_function_bodies(content):
             if brace_depth == 0:
                 output.append(char)
             elif brace_depth == 1 and output and output[-1] == '{':
-                output.append(' /* ... */ ')  # 简化占位符
-
-        i += 1
+                output.append(' /* ... */ ')
 
     return "".join(output)
 

@@ -30,6 +30,7 @@ class Config:
         self.default_mode = "normal"
         self.full_load_timeout_seconds = 5
         self.full_load_max_files = 2500
+        self.save_txt = False
 
         if os.path.exists(json_path):
             self._load(json_path)
@@ -49,6 +50,7 @@ class Config:
             self.default_mode = data.get('default_mode', "normal")
             self.full_load_timeout_seconds = data.get('full_load_timeout_seconds', 5)
             self.full_load_max_files = data.get('full_load_max_files', 2500)
+            self.save_txt = data.get('save_txt', False)
         except Exception as e:
             print(f"Config load warning: {e}")
 

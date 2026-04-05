@@ -7,22 +7,20 @@ class MainView:
     def __init__(self, root, controller):
         self.root = root
         self.controller = controller
-        
+
         # 引用关键组件以便控制器访问
         self.path_entry = None
         self.canvas = None
         self.scroll_frame = None
         self.btn_gen = None
-        self.top_btn_canvas = None
         self.settings_btn = None
-        self.progress_bar = None  # 进度条引用
+        self.progress_bar = None
         self.status_label = None
         self.settings_summary_label = None
         self.mode_var = controller.mode_var
-        self.save_txt_var = controller.save_txt_var
-        
+
         self._setup_ui()
-        
+
         # 将进度条引用传递给controller
         self.controller.progress_bar = self.progress_bar
         self.controller.status_label = self.status_label
@@ -42,8 +40,6 @@ class MainView:
         self.controller.whitelist_btn.pack(side=tk.LEFT, padx=5)
         self.settings_btn = RoundedButton(btn_group, "⚙", self.controller.open_settings, width=40)
         self.settings_btn.pack(side=tk.LEFT, padx=5)
-        self.top_btn_canvas = RoundedButton(btn_group, "📌", self.controller.toggle_topmost, width=40)
-        self.top_btn_canvas.pack(side=tk.LEFT, padx=5)
 
         # 左侧路径框
         path_rounded = RoundedFrame(toolbar, bg=COLORS["bg_panel"], radius=8, padding=0)
@@ -110,7 +106,7 @@ class MainView:
 
         self.settings_summary_label = tk.Label(
             footer,
-            text="输出设置：普通 | 仅生成 Markdown",
+            text="输出模式：普通",
             bg=COLORS["bg_main"],
             fg=COLORS["fg_secondary"],
             font=FONTS["ui"],
@@ -124,7 +120,6 @@ class MainView:
         # 进度条（默认隐藏）
         self.progress_bar = ttk.Progressbar(action_group, variable=self.controller.progress_var,
                                             maximum=100, mode='determinate', length=150)
-        # 默认隐藏进度条
         self.progress_bar.pack_forget()
 
         self.btn_gen = RoundedButton(action_group, "🚀 生成 Markdown", self.controller.on_generate_click,

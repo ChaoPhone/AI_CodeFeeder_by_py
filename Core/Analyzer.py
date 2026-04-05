@@ -1,5 +1,6 @@
 import os
 import time
+import threading
 from .CodeCleaner import clean_content_deeply, remove_license_header, is_junk_filename
 
 
@@ -7,13 +8,23 @@ class ScanTimeoutError(Exception):
     pass
 
 
+class ScanCancelledError(Exception):
+    """扫描被用户取消"""
+    pass
+
+
+# 单文件大小限制 (5MB)
+MAX_SINGLE_FILE_SIZE = 5 * 1024 * 1024
+
+
 class ProjectManager:
     def __init__(self, config):
         self.cfg = config
 
-    def scan_directory(self, start_path):
+    def scan_directory(self, start_path, cancel_event=None):
         """
         扫描目录或单文件，并根据扫描复杂度决定是否启用扩展名过滤。
+        :param cancel_event: threading.Event 用于取消扫描
         返回格式:
         {
             "root_path": "...",
@@ -35,6 +46,7 @@ class ProjectManager:
                 started_at=scan_started_at,
                 timeout_seconds=self.cfg.full_load_timeout_seconds,
                 max_files=self.cfg.full_load_max_files,
+                cancel_event=cancel_event,
             )
             used_full_load = True
         except ScanTimeoutError:
@@ -42,8 +54,18 @@ class ProjectManager:
                 requested_path,
                 root_path,
                 allow_all_extensions=False,
+                cancel_event=cancel_event,
             )
             used_full_load = False
+        except ScanCancelledError:
+            return {
+                "root_path": root_path,
+                "requested_path": requested_path,
+                "files": [],
+                "used_full_load": False,
+                "elapsed": time.time() - scan_started_at,
+                "cancelled": True,
+            }
 
         return {
             "root_path": root_path,
@@ -53,7 +75,7 @@ class ProjectManager:
             "elapsed": time.time() - scan_started_at,
         }
 
-    def _scan_path(self, target_path, root_path, allow_all_extensions, started_at=None, timeout_seconds=None, max_files=None):
+    def _scan_path(self, target_path, root_path, allow_all_extensions, started_at=None, timeout_seconds=None, max_files=None, cancel_event=None):
         file_list = []
 
         if os.path.isfile(target_path):
@@ -68,17 +90,18 @@ class ProjectManager:
             started_at=started_at,
             timeout_seconds=timeout_seconds,
             max_files=max_files,
+            cancel_event=cancel_event,
         )
         return file_list
 
-    def _scan_dir_recursive(self, current_path, root_path, collector, allow_all_extensions, started_at=None, timeout_seconds=None, max_files=None):
-        self._check_scan_limits(started_at, timeout_seconds, len(collector), max_files)
+    def _scan_dir_recursive(self, current_path, root_path, collector, allow_all_extensions, started_at=None, timeout_seconds=None, max_files=None, cancel_event=None):
+        self._check_scan_limits(started_at, timeout_seconds, len(collector), max_files, cancel_event)
 
         try:
             with os.scandir(current_path) as entries:
                 sub_dirs = []
                 for entry in entries:
-                    self._check_scan_limits(started_at, timeout_seconds, len(collector), max_files)
+                    self._check_scan_limits(started_at, timeout_seconds, len(collector), max_files, cancel_event)
 
                     if entry.is_dir(follow_symlinks=False):
                         if entry.name in self.cfg.ignore_dirs:
@@ -100,6 +123,7 @@ class ProjectManager:
                 started_at=started_at,
                 timeout_seconds=timeout_seconds,
                 max_files=max_files,
+                cancel_event=cancel_event,
             )
 
     def _collect_file(self, full_path, root_path, collector, allow_all_extensions):
@@ -115,10 +139,23 @@ class ProjectManager:
         if not allow_all_extensions and ext not in self.cfg.allowed_exts:
             return
 
+        # 单文件大小检查
+        try:
+            file_size = os.path.getsize(full_path)
+            if file_size > MAX_SINGLE_FILE_SIZE:
+                # 跳过超大文件，记录但不报错
+                return
+        except OSError:
+            return
+
         rel_path = os.path.relpath(full_path, root_path)
         collector.append((rel_path, full_path))
 
-    def _check_scan_limits(self, started_at, timeout_seconds, current_file_count, max_files):
+    def _check_scan_limits(self, started_at, timeout_seconds, current_file_count, max_files, cancel_event=None):
+        # 检查取消信号
+        if cancel_event and cancel_event.is_set():
+            raise ScanCancelledError("scan cancelled by user")
+
         if started_at is not None and timeout_seconds is not None:
             if time.time() - started_at > timeout_seconds:
                 raise ScanTimeoutError("full scan timed out")
@@ -183,21 +220,21 @@ class ProjectManager:
         返回生成的总字符数，用于估算 Token
         """
         selected_rels = [item[0] for item in file_items]
-        total_content = ""
+        content_chunks = []  # 使用列表收集，避免 O(N^2) 拼接
 
         # 1. 生成目录树
         tree_text = self._generate_tree_text(start_path, selected_rels)
-        total_content += tree_text
+        content_chunks.append(tree_text)
 
         # 1.5 生成忽略目录树
         if ignored_rels:
             ignored_tree_text = self._generate_tree_text(start_path, ignored_rels, title="# Ignored Files & Directories")
-            total_content += ignored_tree_text
+            content_chunks.append(ignored_tree_text)
 
         # 2. 生成报错日志
         if error_log:
             err_text = f"\n# 🛑 Compilation Error Log\n> Auto-detected from clipboard\n\n```text\n{error_log}\n```\n\n---\n\n"
-            total_content += err_text
+            content_chunks.append(err_text)
 
         # 3. 遍历并处理文件内容（带进度回调）
         total_files = len(file_items)
@@ -220,7 +257,7 @@ class ProjectManager:
 
                 # === 累加逻辑 ===
                 file_section = f"## File: {rel_path}\n\n```{ext_for_md}\n{final_content}\n```\n\n---\n\n"
-                total_content += file_section
+                content_chunks.append(file_section)
 
                 # 报告进度
                 if progress_callback:
@@ -230,9 +267,10 @@ class ProjectManager:
                 print(f"Skipping {rel_path}: {e}")
 
         # 4. 一次性写入文件
+        total_content = "".join(content_chunks)
         with open(output_path, 'w', encoding='utf-8') as outfile:
             outfile.write(total_content)
-        
+
         return len(total_content)
 
     def _read_file_streaming(self, file_path, chunk_size=8192):

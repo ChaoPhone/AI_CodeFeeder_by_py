@@ -123,9 +123,17 @@ def bootstrap_source_mode():
 def start_main_app(init_path=None, launch_source="manual"):
     """启动主应用"""
     from AppUI.MainWindow import CodeFeederApp
+    from AppUI.SystemServices import SingleInstanceService
+
+    # 单实例检测
+    single_instance = SingleInstanceService()
+    if not single_instance.try_acquire():
+        # 已有实例运行，尝试激活并退出
+        single_instance.notify_existing_instance()
+        sys.exit(0)
 
     root = tk.Tk()
-    app = CodeFeederApp(root, init_path, launch_source=launch_source)
+    app = CodeFeederApp(root, init_path, launch_source=launch_source, single_instance=single_instance)
 
     try:
         root.mainloop()
