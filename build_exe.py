@@ -37,9 +37,11 @@ def build():
         # 隐藏导入
         '--hidden-import=pystray._win32',
         '--hidden-import=PIL._tkinter_finder',
+        '--hidden-import=pywintypes',
         '--hidden-import=win32api',
         '--hidden-import=win32con',
         '--hidden-import=win32com.client',
+        '--hidden-import=pythoncom',
 
         # 排除大库
         '--exclude-module=matplotlib',
@@ -50,6 +52,9 @@ def build():
 
         # 图标（如果有）
         # '--icon=icon.ico',
+
+        # DPI 感知 manifest
+        '--manifest=AICodeFeeder.manifest',
     ]
 
     print("开始打包 AICodeFeeder.exe...")

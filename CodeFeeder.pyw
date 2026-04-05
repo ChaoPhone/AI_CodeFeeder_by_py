@@ -7,14 +7,13 @@ AI CodeFeeder 主入口
 import os
 import sys
 import subprocess
-import ctypes
 
 # Windows 高 DPI 感知 - 必须在创建任何 tkinter 窗口之前设置
-try:
-    ctypes.windll.shcore.SetProcessDpiAwareness(2)  # Per-Monitor DPI Aware V2
-except Exception:
+# manifest 文件已处理 DPI，这里作为备用
+if sys.platform == "win32":
     try:
-        ctypes.windll.shcore.SetProcessDpiAwareness(1)  # Per-Monitor DPI Aware
+        import ctypes
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
     except Exception:
         pass
 
