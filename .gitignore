@@ -3,6 +3,11 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Virtual environment
+.venv/
+venv/
+env/
+
 # IDE
 .idea/
 .vscode/
@@ -23,11 +28,6 @@ launch_error.log
 build/
 dist/
 *.spec
-# build_exe.py should be ignored if it's just a local helper, 
-# but usually we keep build scripts in repo. 
-# Based on user's request to "modify gitignore" after mentioning releases, 
-# they likely want to keep the source clean.
-# build_exe.py
 
 # Temp files
 *.tmp

@@ -1,13 +1,10 @@
-
 ***
+# 🚀 AI_CodeFeeder (V1.8.0 单文件版)
 
-# 🚀 AI_CodeFeeder (V1.6.2 ctrl+`极速版！)
-
-![Version](https://img.shields.io/badge/version-1.6.2-blue.svg)
+![Version](https://img.shields.io/badge/version-1.8.0-blue.svg)
 ![Build](https://img.shields.io/badge/build-passing-brightgreen.svg)
 ![Python](https://img.shields.io/badge/python-3.x-blue.svg)
 ![Tkinter](https://img.shields.io/badge/UI-Tkinter-orange.svg)
-![License](https://img.shields.io/badge/license-MIT-green.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey.svg)
 
 > **Stop Copy-Pasting. Start Coding.**
@@ -16,17 +13,32 @@
 
 祝看到这里的同学期末周科科满绩！！！送你一锅重庆鸡公煲🫕🥰🥰🥰
 
-## 🚀 快速开始 (推荐)
+## 🚀 快速开始
 
-**无需安装 Python，直接使用已打包好的 EXE 文件：**
+### 方式一：exe 用户（推荐）
 
-1.  **下载**：前往 [GitHub Releases](https://github.com/ChaoPhone/AI_CodeFeeder/releases) 下载最新的 `AICodeFeeder.exe` 和 `Install_Menu.exe`。
-2.  **安装右键菜单**：运行 `Install_Menu.exe`。它会自动请求管理员权限，并将工具集成到系统右键菜单中。
-3.  **开始使用**：
-    *   **右键启动**：在任意代码文件夹或单个文件上 **右键** -> 选择 **📂 使用 AI CodeFeeder 打开**。
-    *   **快捷键启动**：按下 **Ctrl + `** (反引号) 即可快速呼出程序。
+**只需下载一个 `AICodeFeeder.exe`：**
 
-***
+1. 下载 `AICodeFeeder.exe`
+2. 双击运行
+3. 首次运行会弹窗询问是否注册右键菜单 → 点击「立即注册」
+4. 完成！
+
+之后可：
+- **右键文件夹/文件** → 选择「使用 AI CodeFeeder 打开」
+- **快捷键 Ctrl+`** → 快速唤起
+- **双击 exe** → 打开主界面手动选择目录
+
+### 方式二：源码用户
+
+```bash
+python setup.py              # 安装依赖到 .venv
+python setup.py --register   # 注册右键菜单（需管理员权限）
+```
+
+之后双击 `CodeFeeder.pyw` 即可运行。
+
+---
 
 ## 📖 简介
 
@@ -38,145 +50,107 @@
 
 它是一个基于 Python 的 light-weight 工具，能够**一键扫描**你的工程目录，智能过滤掉无关文件（如 `build`, `.git`, `node_modules` 以及 STM32/Unity 的垃圾文件），生成一份包含**完整目录树**和**所有源码内容**的 Markdown 文件。
 
-**V1.6.1 版本迎来重大架构升级**，采用了分层模块化设计，大幅提升了系统的稳定性和可维护性，并优化了多项用户体验。
+**适合场景：**
+- 向 DeepSeek、豆包、ChatGPT、Claude 等不支持文件夹上传的 AI 提供完整代码上下文
+- 快速整理代码结构，用于技术文档或代码审查
 
-***
+---
 
-## 🛠️ 源码运行 (Python)
+## ✨ 功能特性
 
-如果你想通过 Python 源码运行或进行二次开发：
+| 功能 | 说明 |
+|------|------|
+| 🧠 自适应加载 | 大项目自动回退到扩展名过滤，避免超时 |
+| 📂 目录树可视化 | 点击文件夹批量选择，点击文件单独排除 |
+| ⚙️ 输出模式切换 | 普通 / 简洁 / 骨架 三种模式 |
+| 🖱️ 右键菜单集成 | 在任意文件夹/文件上右键快速打开 |
+| ⌨️ 全局快捷键 | Ctrl+` 快速唤起当前资源管理器中的路径 |
+| 🌙 系统托盘 | 后台静默运行，随时唤起 |
+| 📌 生成后高亮 | 自动在资源管理器中高亮输出文件 |
 
-### 1. 环境准备
+---
 
-确保电脑已安装 Python 3.x，并安装必要的依赖库：
+## 🏗️ 架构
+
+```
+AI_CodeFeeder/
+├── CodeFeeder.pyw          # 入口（支持 exe/源码双模式）
+├── setup.py                # 源码安装脚本
+├── build_exe.py            # 打包脚本
+├── Core/
+│   ├── Installer.py        # 内置注册器（exe首次运行调用）
+│   ├── RuntimeBootstrap.py # 源码模式依赖检测
+│   ├── ConfigLoader.py     # 配置加载
+│   ├── Analyzer.py         # 文件扫描处理
+│   ├── CodeCleaner.py      # 代码清洗算法
+│   └── config.json         # 配置文件
+└── AppUI/
+    ├── MainWindow.py       # 主窗口控制器
+    ├── SystemServices.py   # 系统服务（托盘/热键）
+    ├── Views.py            # 视图层
+    ├── Components.py       # UI组件库
+    ├── Theme.py            # 视觉常量
+    ├── Tree.py             # 目录树数据处理
+    └── BootstrapDialog.py  # 依赖引导对话框
+```
+
+---
+
+## 📦 打包
 
 ```bash
-pip install -r requirements.txt
+pip install pyinstaller
+python build_exe.py
 ```
 
-### 2. 注册右键菜单
+生成 `dist/AICodeFeeder.exe`（单文件，约 15MB）。
 
-1. **以管理员身份**运行 CMD 或 PowerShell。
-2. 进入项目根目录，运行：
-   ```bash
-   python install_menu.py
-   ```
-3. 脚本会自动请求权限并完成右键菜单及开机自启动的注册。
+---
 
-### 3. 直接启动
+## ⚙️ 配置
 
-双击运行 `CodeFeeder.pyw` 或在终端运行 `python CodeFeeder.pyw`。
+编辑 `Core/config.json`：
 
-***
+- `allowed_extensions`: 扫描的文件后缀
+- `ignore_dirs`: 跳过的目录
+- `ignore_files`: 跳过的文件名
+- `full_load_timeout_seconds`: 全量扫描超时时间
+- `default_mode`: 默认输出模式
 
-## ✨ V1.6.2 新版特性
+---
 
-* **🔧 跨环境兼容性增强**：修复了在其他 Windows 电脑上注册表注册失败的问题，优化了右键菜单对不同类型（文件夹/文件）的参数处理
-* **📝 启动错误日志记录**：增加了全局异常捕获和日志记录功能，解决 .pyw 文件无响应问题，错误信息会记录到 `launch_error.log` 文件中
-* **🔄 改进的 pythonw.exe 检测**：更智能地查找无窗口运行环境，提升跨环境兼容性
-* **🏗️ 分层模块化架构**：将代码重构为 UI 层、系统层和业务逻辑层。告别 500+ 行的“上帝类”，代码更清晰，扩展更简单。
-* **🌙 现代深色主题 (VS Code 风格)**：采用更加细腻的配色方案，支持自定义圆角按钮和分栏框，视觉体验更统一。
-* **🌳 深度优化的目录树**：
-  * **更清晰的缩进**：层级缩进增加至 48px，项目结构一目了然。
-  * **直观的状态反馈**：忽略文件时，图标与文字同步变灰并增加删除线，操作反馈更明显。
-  * **自适应行高**：树状图行高根据内容自动适配，在高 DPI 屏幕下表现更佳。
-* **🔄 后台静默运行**：生成任务结束后程序不再强制退出，而是缩回系统托盘保持静默，支持通过快捷键随时唤起。
-* **⌨️ 全局热键唤起 (Ctrl + `)**：在 Windows 资源管理器中选中文件夹或在窗口内，通过快捷键即可快速呼出并自动加载当前路径。
-* **🖱️ 右键菜单集成**：通过 `install_menu.py` 快速将工具集成到系统右键菜单，支持无窗口静默运行。
+## 🔧 故障排除
 
-***
+| 问题 | 解决方案 |
+|------|----------|
+| exe 无响应 | 检查是否被杀毒软件拦截 |
+| 右键菜单无效 | 以管理员权限重新运行 exe，托盘菜单中选择「注册右键菜单」 |
+| 快捷键冲突 | 托盘菜单 → 设置中修改热键 |
+| 源码模式依赖缺失 | 运行 `python setup.py --verify` |
 
-## 🏗️ 架构说明 (V1.6.1+)
+---
 
-采用了 **Layered Architecture (分层架构)**，实现了界面、系统交互与核心逻辑的深度解耦。
+## 👨‍💻 版本历史
 
-```text
-AI_CodeFeeder/
-├── CodeFeeder.pyw         # [入口] 无窗口启动器
-├── AppUI/                 # [UI & 系统层]
-│   ├── MainWindow.py      # 控制器：协调 UI 与后台服务
-│   ├── Views.py           # 视图层：界面布局逻辑
-│   ├── Components.py      # 组件库：RoundedButton, RoundedFrame
-│   ├── SystemServices.py  # 系统服务：热键、托盘、注册表操作
-│   ├── Theme.py           # 视觉常量：颜色、字体、圆角
-│   └── Tree.py            # 数据处理：计算目录树结构
-├── Core/                  # [核心业务层]
-│   ├── Analyzer.py        # 文件扫描、Pipeline 流水线处理
-│   ├── CodeCleaner.py     # 代码清洗算法 (正则去注释、提取骨架)
-│   ├── ConfigLoader.py    # 配置加载器
-│   └── config.json        # [配置] 用户自定义规则
-├── install_menu.py        # 右键菜单/自启动注册脚本
-├── uninstall_menu.py      # 菜单/自启动卸载脚本
-├── build_exe.py           # [工具] 打包脚本
-├── requirements.txt       # 项目依赖
-└── .gitignore             # Git 忽略规则
-```
+**V1.8.0** [单文件版] 2026.04.05
+- 简化为单个 exe，首次运行自动注册
+- 托盘菜单增加注册/卸载选项
+- 入口统一处理 exe/源码双模式
 
-***
+**V1.7.0** [自适应加载版] 2026.04.05
+- 5秒自适应预加载，大项目自动回退
 
-## 🔍 故障排除 (Debug)
+**V1.6.2** [BugFix版本] 2026.03.14
+- 修复了在其他 Windows 电脑上注册表注册失败的问题
+- 优化了右键菜单对不同类型（文件夹/文件）的参数处理
+- 增加了启动错误日志记录功能
 
-如果程序运行出现问题，可以按以下步骤排查：
+**V1.6.1** [架构重构版] 2026.02.14
+- 分层模块化架构、深色主题、系统托盘
 
-1.  **检查日志**：如果 `.pyw` 运行没有反应，请查看脚本同目录下的 `launch_error.log`。
-2.  **右键菜单无效**：请重新运行 `python install_menu.py`（需管理员权限），脚本会自动覆盖旧的注册表项。
-3.  **快捷键冲突**：如果 `Ctrl + ` ` 被占用，可以在 `AppUI/SystemServices.py` 中修改 `self.hotkey`。
-4.  **手动运行**：在 CMD 中运行 `python CodeFeeder.pyw`，可以直接在控制台看到所有输出和报错信息。
+**V1.5.0** [GUI版本] 2026.02.06
 
-***
-
-## ⚙️ 配置说明 (Advanced)
-
-所有的过滤规则都存储在 `Core/config.json` 中，你可以直接编辑它来定制你的规则：
-
-* **`allowed_extensions`**: 定义哪些后缀的文件会被扫描。
-* **`ignore_dirs`**: 递归扫描时强制跳过的文件夹（如 `.git`, `node_modules`）。
-* **`ignore_prefixes`**: 针对特定开发环境（如 STM32）忽略特定前缀的自动生成文件。
-* **`ignore_files`**: 精确忽略特定的文件名。
-
-***
-
-## 📦 打包与分发 (Developer)
-
-如果你想将项目打包成独立的 EXE 文件以便在没有 Python 环境的电脑上运行：
-
-1. **安装打包工具**：
-   ```bash
-   pip install pyinstaller
-   ```
-2. **运行打包脚本**：
-   ```bash
-   python build_exe.py
-   ```
-3. **获取生成物**：
-   - `dist/AICodeFeeder.exe`：主程序（单文件，无窗口）。
-   - `dist/Install_Menu.exe`：安装程序（自动请求管理员权限，配置右键菜单）。
-
-> **注意**：分发给他人时，建议同时发送这两个文件。用户只需运行一次 `Install_Menu.exe` 即可完成所有配置。
-
-***
-
-## 👨‍💻 版本与作者
-
-**AI_CodeFeeder V1.6.2 (BugFix Edition)**
-
-* **Original Author**: ChaoPhone
-* **Refactored By**: AI Assistant & User
-* **Last Update**: 2026/03/14
-
-***
-
-**V1.6.2** [BugFix版本] Updated by **ChaoPhone** on 2026.03.14
-* 修复了在其他 Windows 电脑上注册表注册失败的问题
-* 优化了右键菜单对不同类型（文件夹/文件）的参数处理
-* 增加了启动错误日志记录功能，解决 .pyw 文件无响应问题
-* 改进了 pythonw.exe 的检测逻辑，提升跨环境兼容性
-
-**V1.6.1** [OMG版本] Updated by **ChaoPhone** with **Gemini 3 Pro** on 2026.02.14
-
-**V1.5.0** [GUI版本] Updated by **ChaoPhone** on 2026.02.06
-
-**V1.0.8** [MVP版本] Updated by **ChaoPhone** on 2026.01.18
+**V1.0.8** [MVP版本] 2026.01.18
 
 ---
 *Happy Coding!*

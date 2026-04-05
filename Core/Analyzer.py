@@ -1,5 +1,10 @@
 import os
+import time
 from .CodeCleaner import clean_content_deeply, remove_license_header, is_junk_filename
+
+
+class ScanTimeoutError(Exception):
+    pass
 
 
 class ProjectManager:
@@ -8,31 +13,118 @@ class ProjectManager:
 
     def scan_directory(self, start_path):
         """
-        扫描目录，返回所有符合条件的文件列表
-        返回格式: [(rel_path, full_path), ...]
+        扫描目录或单文件，并根据扫描复杂度决定是否启用扩展名过滤。
+        返回格式:
+        {
+            "root_path": "...",
+            "files": [(rel_path, full_path), ...],
+            "used_full_load": bool,
+            "elapsed": float,
+            "requested_path": "...",
+        }
         """
+        requested_path = os.path.abspath(os.path.normpath(start_path))
+        root_path = requested_path if os.path.isdir(requested_path) else os.path.dirname(requested_path)
+        scan_started_at = time.time()
+
+        try:
+            file_list = self._scan_path(
+                requested_path,
+                root_path,
+                allow_all_extensions=True,
+                started_at=scan_started_at,
+                timeout_seconds=self.cfg.full_load_timeout_seconds,
+                max_files=self.cfg.full_load_max_files,
+            )
+            used_full_load = True
+        except ScanTimeoutError:
+            file_list = self._scan_path(
+                requested_path,
+                root_path,
+                allow_all_extensions=False,
+            )
+            used_full_load = False
+
+        return {
+            "root_path": root_path,
+            "requested_path": requested_path,
+            "files": sorted(file_list, key=lambda x: x[0]),
+            "used_full_load": used_full_load,
+            "elapsed": time.time() - scan_started_at,
+        }
+
+    def _scan_path(self, target_path, root_path, allow_all_extensions, started_at=None, timeout_seconds=None, max_files=None):
         file_list = []
-        ignore_files_dynamic = self.cfg.ignore_files.copy()
 
-        for root, dirs, files in os.walk(start_path):
-            # 1. 过滤文件夹 (原地修改 dirs 以阻止递归)
-            dirs[:] = [d for d in dirs if d not in self.cfg.ignore_dirs]
+        if os.path.isfile(target_path):
+            self._collect_file(target_path, root_path, file_list, allow_all_extensions)
+            return file_list
 
-            for f in files:
-                if f in ignore_files_dynamic: continue
+        self._scan_dir_recursive(
+            target_path,
+            root_path,
+            file_list,
+            allow_all_extensions,
+            started_at=started_at,
+            timeout_seconds=timeout_seconds,
+            max_files=max_files,
+        )
+        return file_list
 
-                # 前缀过滤
-                if any(f.startswith(prefix) for prefix in self.cfg.ignore_prefixes): continue
+    def _scan_dir_recursive(self, current_path, root_path, collector, allow_all_extensions, started_at=None, timeout_seconds=None, max_files=None):
+        self._check_scan_limits(started_at, timeout_seconds, len(collector), max_files)
 
-                # 扩展名过滤
-                ext = os.path.splitext(f)[1].lower()
-                if ext in self.cfg.allowed_exts:
-                    full_path = os.path.join(root, f)
-                    rel_path = os.path.relpath(full_path, start_path)
-                    file_list.append((rel_path, full_path))
+        try:
+            with os.scandir(current_path) as entries:
+                sub_dirs = []
+                for entry in entries:
+                    self._check_scan_limits(started_at, timeout_seconds, len(collector), max_files)
 
-        # 按相对路径排序
-        return sorted(file_list, key=lambda x: x[0])
+                    if entry.is_dir(follow_symlinks=False):
+                        if entry.name in self.cfg.ignore_dirs:
+                            continue
+                        sub_dirs.append(entry.path)
+                        continue
+
+                    if entry.is_file(follow_symlinks=False):
+                        self._collect_file(entry.path, root_path, collector, allow_all_extensions)
+        except PermissionError:
+            return
+
+        for sub_dir in sub_dirs:
+            self._scan_dir_recursive(
+                sub_dir,
+                root_path,
+                collector,
+                allow_all_extensions,
+                started_at=started_at,
+                timeout_seconds=timeout_seconds,
+                max_files=max_files,
+            )
+
+    def _collect_file(self, full_path, root_path, collector, allow_all_extensions):
+        filename = os.path.basename(full_path)
+
+        if filename in self.cfg.ignore_files:
+            return
+
+        if any(filename.startswith(prefix) for prefix in self.cfg.ignore_prefixes):
+            return
+
+        ext = os.path.splitext(filename)[1].lower()
+        if not allow_all_extensions and ext not in self.cfg.allowed_exts:
+            return
+
+        rel_path = os.path.relpath(full_path, root_path)
+        collector.append((rel_path, full_path))
+
+    def _check_scan_limits(self, started_at, timeout_seconds, current_file_count, max_files):
+        if started_at is not None and timeout_seconds is not None:
+            if time.time() - started_at > timeout_seconds:
+                raise ScanTimeoutError("full scan timed out")
+
+        if max_files and current_file_count > max_files:
+            raise ScanTimeoutError("full scan exceeded file limit")
 
     def _generate_tree_text(self, start_path, selected_rel_paths, title="# Project Directory Structure"):
         """

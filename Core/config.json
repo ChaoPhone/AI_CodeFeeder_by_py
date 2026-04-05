@@ -13,19 +13,22 @@
   ],
 
   "ignore_prefixes": [
-    "stm32f4xx_it", "system_stm32", "stm32f4xx_hal_conf",
+    "system_stm32", "stm32f4xx_hal_conf",
     "stm32f4xx_hal_msp", "sysmem", "syscalls", "FreeRTOSConfig",
     "jquery", "bootstrap"
   ],
 
   "ignore_files": [
-    "CodeFeeder_GUI.py",
     "package-lock.json",
     "yarn.lock"
   ],
 
+  "default_mode": "normal",
+  "full_load_timeout_seconds": 5,
+  "full_load_max_files": 2500,
+
   "version": [
-    "v1.6.2",
-    "BugFix版本"
+    "v1.8.0",
+    "单文件版"
   ]
 }

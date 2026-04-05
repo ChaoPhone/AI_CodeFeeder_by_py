@@ -1,58 +1,67 @@
+"""
+简化打包脚本 - 只生成单个 AICodeFeeder.exe
+用户首次运行时会自动提示注册右键菜单
+"""
 import PyInstaller.__main__
 import os
 import shutil
 
+
 def build():
-    # 确保在项目根目录
     project_dir = os.path.dirname(os.path.abspath(__file__))
     os.chdir(project_dir)
 
-    # 1. 清理旧的构建文件
+    # 清理旧构建
     for folder in ['build', 'dist']:
         if os.path.exists(folder):
             shutil.rmtree(folder)
             print(f"清理旧目录: {folder}")
 
-    # 2. PyInstaller 参数
+    # 单 exe 打包
     params = [
-        'CodeFeeder.pyw',                # 主入口文件
-        '--name=AICodeFeeder',           # 生成的 exe 名称
-        '--windowed',                    # 无控制台窗口
-        '--onefile',                     # 打包成单个 exe
-        # '--icon=icon.ico',             # 如果有图标的话可以加上
-        
-        # 包含必要的资源文件
+        'CodeFeeder.pyw',
+        '--name=AICodeFeeder',
+        '--windowed',
+        '--onefile',
+        '--clean',
+
+        # 内置资源
         '--add-data=Core/config.json;Core',
-        
-        # 包含整个 AppUI 和 Core 文件夹（作为模块）
         '--add-data=AppUI;AppUI',
         '--add-data=Core;Core',
-        
-        # 排除不必要的库
+
+        # 收集所有子模块（一劳永逸）
+        '--collect-submodules=AppUI',
+        '--collect-submodules=Core',
+
+        # 隐藏导入
+        '--hidden-import=pystray._win32',
+        '--hidden-import=PIL._tkinter_finder',
+        '--hidden-import=win32api',
+        '--hidden-import=win32con',
+        '--hidden-import=win32com.client',
+
+        # 排除大库
         '--exclude-module=matplotlib',
         '--exclude-module=notebook',
         '--exclude-module=jedi',
-        
-        # 强制包含某些可能被遗漏的库
-        '--hidden-import=pystray._win32',
-        '--hidden-import=PIL._tkinter_finder',
+        '--exclude-module=numpy',
+        '--exclude-module=pandas',
+
+        # 图标（如果有）
+        # '--icon=icon.ico',
     ]
 
-    print(f"开始打包...")
+    print("开始打包 AICodeFeeder.exe...")
     PyInstaller.__main__.run(params)
-    print(f"打包完成！生成的 exe 位于 dist/AICodeFeeder.exe")
+    print("打包完成！")
+    print(f"生成文件: dist/AICodeFeeder.exe")
+    print()
+    print("使用方式:")
+    print("  1. 双击 AICodeFeeder.exe 运行")
+    print("  2. 首次运行会弹窗提示注册右键菜单")
+    print("  3. 注册后可右键文件夹/文件快速打开，或用 Ctrl+` 快捷键唤起")
 
-    # 3. 同时也打包 install_menu.py 为 exe (可选，为了方便分发)
-    print(f"开始打包安装程序...")
-    install_params = [
-        'install_menu.py',
-        '--name=Install_Menu',
-        '--console',                     # 安装程序需要控制台
-        '--onefile',
-        '--uac-admin',                   # 请求管理员权限
-    ]
-    PyInstaller.__main__.run(install_params)
-    print(f"安装程序打包完成！生成的 exe 位于 dist/Install_Menu.exe")
 
 if __name__ == "__main__":
     build()

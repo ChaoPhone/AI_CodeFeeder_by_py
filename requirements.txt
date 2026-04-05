@@ -2,4 +2,5 @@ pywin32==311
 keyboard==0.13.5
 pystray==0.19.5
 Pillow==12.1.0
+six==1.17.0
 pyinstaller==6.18.0

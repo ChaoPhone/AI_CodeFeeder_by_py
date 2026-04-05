@@ -14,7 +14,10 @@ class MainView:
         self.scroll_frame = None
         self.btn_gen = None
         self.top_btn_canvas = None
+        self.settings_btn = None
         self.progress_bar = None  # 进度条引用
+        self.status_label = None
+        self.settings_summary_label = None
         self.mode_var = controller.mode_var
         self.save_txt_var = controller.save_txt_var
         
@@ -22,6 +25,8 @@ class MainView:
         
         # 将进度条引用传递给controller
         self.controller.progress_bar = self.progress_bar
+        self.controller.status_label = self.status_label
+        self.controller.settings_summary_label = self.settings_summary_label
 
     def _setup_ui(self):
         # --- 顶部工具栏 ---
@@ -32,10 +37,11 @@ class MainView:
         btn_group = tk.Frame(toolbar, bg=COLORS["bg_main"])
         btn_group.pack(side=tk.RIGHT, padx=(10, 0))
 
-        RoundedButton(btn_group, "浏览", self.controller.browse_dir, width=70).pack(side=tk.LEFT, padx=5)
         RoundedButton(btn_group, "刷新", self.controller.refresh_file_list, width=70).pack(side=tk.LEFT, padx=5)
         self.controller.whitelist_btn = RoundedButton(btn_group, "白名单", self.controller.toggle_whitelist_mode, width=80, bg=COLORS["bg_hover"])
         self.controller.whitelist_btn.pack(side=tk.LEFT, padx=5)
+        self.settings_btn = RoundedButton(btn_group, "⚙", self.controller.open_settings, width=40)
+        self.settings_btn.pack(side=tk.LEFT, padx=5)
         self.top_btn_canvas = RoundedButton(btn_group, "📌", self.controller.toggle_topmost, width=40)
         self.top_btn_canvas.pack(side=tk.LEFT, padx=5)
 
@@ -46,21 +52,35 @@ class MainView:
         path_container = path_rounded.inner_frame
         path_container.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
 
-        tk.Label(path_container, text="📂", bg=COLORS["bg_panel"], fg=COLORS["fg_secondary"], 
-                 font=("Segoe UI Emoji", 10)).pack(side=tk.LEFT, padx=(0, 5))
+        folder_icon = tk.Label(path_container, text="📂", bg=COLORS["bg_panel"], fg=COLORS["fg_secondary"],
+                               font=("Segoe UI Emoji", 10), cursor="hand2")
+        folder_icon.pack(side=tk.LEFT, padx=(0, 5))
         
         self.path_entry = tk.Entry(path_container, bg=COLORS["bg_panel"], fg=COLORS["fg_text"], 
                                    insertbackground="white", relief=tk.FLAT, 
-                                   font=(UI_FONT_FAMILY, 11))
+                                   font=(UI_FONT_FAMILY, 11), cursor="hand2")
         self.path_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
         
         self.path_entry.insert(0, "输入或选择项目路径...")
         self.path_entry.bind("<FocusIn>", self.controller._on_path_focus_in)
         self.path_entry.bind("<FocusOut>", self.controller._on_path_focus_out)
+        self.path_entry.bind("<Button-1>", self.controller.on_path_entry_click)
+        folder_icon.bind("<Button-1>", self.controller.on_path_entry_click)
+        path_container.bind("<Button-1>", self.controller.on_path_entry_click)
 
         # --- 主体内容区 ---
         content_area = tk.Frame(self.root, bg=COLORS["bg_main"], padx=30)
         content_area.pack(fill=tk.BOTH, expand=True)
+
+        self.status_label = tk.Label(
+            content_area,
+            text="就绪",
+            bg=COLORS["bg_main"],
+            fg=COLORS["fg_secondary"],
+            font=FONTS["ui"],
+            anchor="w"
+        )
+        self.status_label.pack(fill=tk.X, pady=(0, 8))
 
         tree_rounded = RoundedFrame(content_area, radius=COLORS["radius_panel"])
         tree_rounded.pack(fill=tk.BOTH, expand=True)
@@ -88,19 +108,22 @@ class MainView:
         footer = tk.Frame(self.root, bg=COLORS["bg_main"], padx=25, pady=25)
         footer.pack(fill=tk.X)
 
-        mode_frame = tk.Frame(footer, bg=COLORS["bg_main"])
-        mode_frame.pack(side=tk.LEFT)
-        tk.Label(mode_frame, text="模式:", bg=COLORS["bg_main"], fg=COLORS["fg_text"], font=FONTS["ui_bold"]).pack(side=tk.LEFT, padx=(0, 15))
-        self._create_modern_radio(mode_frame, "普通", "normal")
-        self._create_modern_radio(mode_frame, "去注释", "gap")
-        self._create_modern_radio(mode_frame, "骨架", "skeleton")
+        self.settings_summary_label = tk.Label(
+            footer,
+            text="输出设置：普通 | 仅生成 Markdown",
+            bg=COLORS["bg_main"],
+            fg=COLORS["fg_secondary"],
+            font=FONTS["ui"],
+            anchor="w"
+        )
+        self.settings_summary_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
         action_group = tk.Frame(footer, bg=COLORS["bg_main"])
         action_group.pack(side=tk.RIGHT)
 
         # 进度条（默认隐藏）
-        self.progress_bar = tk.ttk.Progressbar(action_group, variable=self.controller.progress_var, 
-                                               maximum=100, mode='determinate', length=150)
+        self.progress_bar = ttk.Progressbar(action_group, variable=self.controller.progress_var,
+                                            maximum=100, mode='determinate', length=150)
         # 默认隐藏进度条
         self.progress_bar.pack_forget()
 
@@ -109,14 +132,3 @@ class MainView:
                                     radius=COLORS["radius_btn"],
                                     font=FONTS["h1"], padding_x=50, padding_y=12)
         self.btn_gen.pack(side=tk.LEFT, padx=10)
-
-        tk.Checkbutton(action_group, text="同步生成txt", variable=self.save_txt_var,
-                       bg=COLORS["bg_main"], fg=COLORS["fg_text"],
-                       selectcolor=COLORS["bg_panel"], activebackground=COLORS["bg_main"],
-                       activeforeground=COLORS["accent"], font=FONTS["ui"], cursor="hand2").pack(side=tk.LEFT, padx=15)
-
-    def _create_modern_radio(self, parent, text, value):
-        tk.Radiobutton(parent, text=text, variable=self.mode_var, value=value,
-                       bg=COLORS["bg_main"], fg=COLORS["fg_text"], selectcolor=COLORS["bg_panel"],
-                       activebackground=COLORS["bg_main"], activeforeground=COLORS["accent"], 
-                       font=FONTS["ui"], cursor="hand2").pack(side=tk.LEFT, padx=5)

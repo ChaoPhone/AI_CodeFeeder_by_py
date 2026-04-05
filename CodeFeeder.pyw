@@ -1,64 +1,165 @@
+"""
+AI CodeFeeder 主入口
+支持两种运行模式：
+1. 源码模式：自动检测并切换到 .venv，处理依赖
+2. exe 模式：直接启动，内置首次运行注册检测
+"""
 import os
 import sys
-import traceback
-import datetime
+import subprocess
+import ctypes
 
-# --- 全局异常捕获与日志记录 ---
-# 设置日志文件路径 (与脚本同目录)
-LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "launch_error.log")
-
-def log_error(message):
+# Windows 高 DPI 感知 - 必须在创建任何 tkinter 窗口之前设置
+try:
+    ctypes.windll.shcore.SetProcessDpiAwareness(2)  # Per-Monitor DPI Aware V2
+except Exception:
     try:
-        with open(LOG_FILE, "a", encoding="utf-8") as f:
-            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            f.write(f"[{timestamp}] {message}\n")
-    except:
-        pass # 如果写日志都失败了，那就没办法了
-
-def exception_hook(exctype, value, tb):
-    error_msg = "".join(traceback.format_exception(exctype, value, tb))
-    log_error(f"Uncaught exception:\n{error_msg}")
-    # 尝试弹窗提示
-    try:
-        import tkinter.messagebox
-        import tkinter as tk
-        # 隐藏主窗口
-        root = tk.Tk()
-        root.withdraw()
-        tkinter.messagebox.showerror("CodeFeeder Error", f"启动发生错误，请查看日志:\n{LOG_FILE}\n\n{value}")
-        root.destroy()
-    except:
+        ctypes.windll.shcore.SetProcessDpiAwareness(1)  # Per-Monitor DPI Aware
+    except Exception:
         pass
-    sys.exit(1)
-
-sys.excepthook = exception_hook
-# ---------------------------
-
-# 将工作目录切换到脚本所在目录，确保资源加载正确
-os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 import tkinter as tk
-# 确保导入的是 AppUI 包下的 MainWindow
-from AppUI.MainWindow import CodeFeederApp
+
+PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
+os.chdir(PROJECT_DIR)
+
+
+def is_frozen_exe():
+    """检测是否为打包后的 exe"""
+    return getattr(sys, 'frozen', False)
+
+
+def normalize_case_path(path):
+    return os.path.normcase(os.path.normpath(os.path.abspath(path)))
+
+
+def get_venv_python_executable():
+    """获取 .venv 中的 Python 解释器"""
+    scripts_dir = os.path.join(PROJECT_DIR, ".venv", "Scripts")
+    for exe_name in ("pythonw.exe", "python.exe"):
+        candidate = os.path.join(scripts_dir, exe_name)
+        if os.path.exists(candidate):
+            return candidate
+    return None
+
+
+def is_runtime_isolated():
+    return os.environ.get("AICF_RUNTIME_ISOLATED") == "1"
+
+
+def ensure_venv_runtime():
+    """源码模式：确保在 .venv 中运行"""
+    if is_frozen_exe():
+        return  # exe 模式跳过
+
+    venv_python = get_venv_python_executable()
+    target_python = venv_python or sys.executable
+
+    current_python = normalize_case_path(sys.executable)
+    desired_python = normalize_case_path(target_python)
+
+    if current_python == desired_python and is_runtime_isolated():
+        return
+
+    relaunch_args = [target_python, "-s", os.path.abspath(__file__)]
+    relaunch_args.extend(sys.argv[1:])
+    child_env = os.environ.copy()
+    child_env["PYTHONNOUSERSITE"] = "1"
+    child_env["PYTHONUTF8"] = "1"
+    child_env["PYTHONIOENCODING"] = "utf-8"
+    child_env["AICF_RUNTIME_ISOLATED"] = "1"
+
+    subprocess.Popen(relaunch_args, cwd=PROJECT_DIR, env=child_env)
+    sys.exit(0)
+
+
+def resolve_launch_context():
+    """解析启动参数"""
+    init_path = None
+    launch_source = "manual"
+
+    if len(sys.argv) > 1:
+        arg = sys.argv[1]
+        # 处理静默注册/卸载参数
+        if arg == "--register-silent":
+            from Core.Installer import register_context_menu
+            register_context_menu()
+            sys.exit(0)
+        elif arg == "--unregister-silent":
+            from Core.Installer import unregister_context_menu
+            unregister_context_menu()
+            sys.exit(0)
+
+        # 处理路径参数
+        if os.path.exists(arg):
+            init_path = os.path.abspath(arg)
+            launch_source = "arg"
+
+    return init_path, launch_source
+
+
+def bootstrap_source_mode():
+    """源码模式的依赖检测与加载"""
+    from Core.RuntimeBootstrap import RuntimeBootstrapper
+
+    bootstrapper = RuntimeBootstrapper(PROJECT_DIR)
+    bootstrapper.install_exception_hook()
+    bootstrapper.refresh_site_packages()
+
+    missing = bootstrapper.get_missing_statuses()
+    if missing:
+        from AppUI.BootstrapDialog import DependencyBootstrapDialog
+        dialog = DependencyBootstrapDialog(bootstrapper, missing)
+        result = dialog.show()
+
+        if result == "installed":
+            bootstrapper.refresh_site_packages()
+            os.environ["AICF_BOOTSTRAP_WARNED"] = "1"
+        elif result == "compatibility":
+            os.environ["AICF_BOOTSTRAP_WARNED"] = "1"
+        else:
+            sys.exit(1)
+
+
+def start_main_app(init_path=None, launch_source="manual"):
+    """启动主应用"""
+    from AppUI.MainWindow import CodeFeederApp
+
+    root = tk.Tk()
+    app = CodeFeederApp(root, init_path, launch_source=launch_source)
+
+    try:
+        root.mainloop()
+    except KeyboardInterrupt:
+        try:
+            root.destroy()
+        except Exception:
+            pass
 
 
 def main():
-    # 1. 检查是否有命令行参数 (右键菜单传入的路径)
-    init_dir = None
-    if len(sys.argv) > 1:
-        potential_path = sys.argv[1]
-        if os.path.isdir(potential_path):
-            init_dir = potential_path
+    init_path, launch_source = resolve_launch_context()
 
-    # 2. 启动 GUI
-    root = tk.Tk()
+    if is_frozen_exe():
+        # exe 模式：简化启动流程
+        from Core.Installer import check_first_run_and_prompt
 
-    # 加上自爆路径标题，方便你确认运行的是否是新版
-    current_file_path = os.path.abspath(__file__)
-    root.title(f"✅ 新版运行中: {current_file_path}")
+        # 首次运行检测（需要先创建临时 root 以便显示对话框）
+        temp_root = tk.Tk()
+        temp_root.withdraw()
 
-    app = CodeFeederApp(root, init_dir)
-    root.mainloop()
+        if not check_first_run_and_prompt(temp_root):
+            temp_root.destroy()
+            sys.exit(0)  # 正在注册，会重启
+
+        temp_root.destroy()
+        start_main_app(init_path, launch_source)
+
+    else:
+        # 源码模式：完整的 venv 和依赖处理
+        ensure_venv_runtime()
+        bootstrap_source_mode()
+        start_main_app(init_path, launch_source)
 
 
 if __name__ == "__main__":

@@ -84,6 +84,8 @@ class RoundedButton(tk.Canvas):
         if "bg" in kwargs:
             self.base_bg = kwargs.pop("bg")
             self.curr_bg = self.base_bg
+        if "fg" in kwargs:
+            self.fg = kwargs.pop("fg")
         
         if kwargs:
             super().configure(**kwargs)
