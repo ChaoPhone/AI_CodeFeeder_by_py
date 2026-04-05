@@ -55,6 +55,7 @@ class CodeFeederApp:
         self.save_txt_var = tk.BooleanVar(value=False)
         self.whitelist_mode = False
         self.progress_var = tk.IntVar(value=0)
+        self.collapsed_folders = set()  # 折叠的文件夹路径
 
         self.progress_bar = None
         self.status_label = None
@@ -319,6 +320,7 @@ class CodeFeederApp:
         self.all_files_map.clear()
         self.selection_state.clear()
         self.path_to_label.clear()
+        self.collapsed_folders.clear()
 
         self.scan_request_id += 1
         scan_id = self.scan_request_id
@@ -354,15 +356,18 @@ class CodeFeederApp:
             return
 
         default_selected = not self.whitelist_mode
-        visual_items = TreeBuilder.build_visual_data(flat_files)
+        visual_items, auto_collapsed = TreeBuilder.build_visual_data(flat_files, self.collapsed_folders)
+        self.collapsed_folders = auto_collapsed
         for item in visual_items:
             if item["type"] == "file":
                 self.all_files_map[item["rel_path"]] = item["full_path"]
                 self.selection_state[item["rel_path"]] = default_selected
             self._create_tree_row(item)
 
+        collapsed_count = len(self.collapsed_folders)
+        collapse_hint = f"，{collapsed_count} 个大文件夹已自动折叠" if collapsed_count > 0 else ""
         scan_mode_text = "全量加载" if result["used_full_load"] else "扩展名过滤加载"
-        self._set_status(f"扫描完成，耗时 {result['elapsed']:.2f}s，共 {len(flat_files)} 个文件，{scan_mode_text}。", reset_after_ms=7000)
+        self._set_status(f"扫描完成，耗时 {result['elapsed']:.2f}s，共 {len(flat_files)} 个文件，{scan_mode_text}{collapse_hint}。", reset_after_ms=7000)
         self._restore_generate_button()
 
     def _on_scan_error(self, scan_id, message):
@@ -376,8 +381,18 @@ class CodeFeederApp:
     def _create_tree_row(self, item):
         is_file = (item["type"] == "file")
         rel_path = item.get("rel_path")
+        is_collapsed = item.get("collapsed", False)
         level = rel_path.count(os.sep) if rel_path else 0
-        indent_px = level * 48
+
+        # 限制最大缩进层级（避免超出显示框）
+        MAX_INDENT_LEVEL = 6
+        display_level = min(level, MAX_INDENT_LEVEL)
+        indent_px = display_level * 36  # 减小每层缩进
+
+        # 如果层级超过限制，添加提示
+        name_text = item.get("name", item.get("original_name", ""))
+        if level > MAX_INDENT_LEVEL:
+            name_text = f".../{name_text}"
 
         row_frame = tk.Frame(self.scroll_frame, bg=COLORS["bg_panel"])
         row_frame.pack(fill=tk.X, pady=1)
@@ -387,8 +402,9 @@ class CodeFeederApp:
             spacer = tk.Frame(row_frame, bg=COLORS["bg_panel"], width=indent_px, height=34)
             spacer.pack(side=tk.LEFT, fill=tk.Y)
 
-        icon_char = "📄" if is_file else "📁"
-        if is_file and item["name"].endswith(".py"):
+        # 图标：折叠的文件夹显示不同图标
+        icon_char = "📄" if is_file else ("📁" if not is_collapsed else "📂")
+        if is_file and name_text.endswith(".py"):
             icon_char = "🐍"
         icon_color = COLORS["icon_file"] if is_file else COLORS["icon_folder"]
 
@@ -401,22 +417,31 @@ class CodeFeederApp:
         if not is_file and is_selected:
             curr_fg = COLORS["folder_fg"]
 
-        name_lbl = tk.Label(row_frame, text=item["name"], bg=COLORS["bg_panel"], fg=curr_fg, font=curr_font, anchor="w")
+        # 折叠的文件夹显示提示文字（灰色）
+        if is_collapsed:
+            curr_fg = COLORS["fg_secondary"]
+
+        name_lbl = tk.Label(row_frame, text=name_text, bg=COLORS["bg_panel"], fg=curr_fg, font=curr_font, anchor="w")
         name_lbl.pack(side=tk.LEFT, fill=tk.X, expand=True, pady=6)
 
         if rel_path:
-            self.path_to_label[rel_path] = {"label": name_lbl, "frame": row_frame, "icon": icon_lbl, "spacer": spacer, "is_file": is_file}
+            self.path_to_label[rel_path] = {"label": name_lbl, "frame": row_frame, "icon": icon_lbl, "spacer": spacer, "is_file": is_file, "collapsed": is_collapsed}
 
         def toggle(event):
             if is_file:
                 self.on_toggle_file(rel_path)
             else:
-                self.on_toggle_folder(rel_path)
+                # 点击文件夹时处理折叠/展开
+                if is_collapsed:
+                    self._toggle_folder_collapse(rel_path)
+                else:
+                    self.on_toggle_folder(rel_path)
 
         def on_enter(event):
+            hover_bg = COLORS["bg_hover"]
             for widget in [row_frame, name_lbl, icon_lbl, spacer]:
                 if widget:
-                    widget.config(bg=COLORS["bg_hover"])
+                    widget.config(bg=hover_bg)
 
         def on_leave(event):
             for widget in [row_frame, name_lbl, icon_lbl, spacer]:
@@ -428,6 +453,36 @@ class CodeFeederApp:
                 widget.bind("<Button-1>", toggle)
                 widget.bind("<Enter>", on_enter)
                 widget.bind("<Leave>", on_leave)
+
+    def _toggle_folder_collapse(self, rel_path):
+        """切换文件夹的折叠状态"""
+        if rel_path in self.collapsed_folders:
+            self.collapsed_folders.discard(rel_path)
+        else:
+            self.collapsed_folders.add(rel_path)
+        # 重新渲染树
+        self._rerender_tree()
+
+    def _rerender_tree(self):
+        """重新渲染目录树（保持选择状态）"""
+        if not self.all_files_map:
+            return
+
+        # 保存当前选择状态
+        saved_selection = dict(self.selection_state)
+
+        self._clear_tree()
+        self.path_to_label.clear()
+
+        # 重建文件列表
+        flat_files = [(rel, full) for rel, full in self.all_files_map.items()]
+        visual_items, _ = TreeBuilder.build_visual_data(flat_files, self.collapsed_folders)
+
+        for item in visual_items:
+            if item["type"] == "file":
+                rel = item["rel_path"]
+                self.selection_state[rel] = saved_selection.get(rel, True)
+            self._create_tree_row(item)
 
     def on_toggle_file(self, rel_path):
         new_state = not self.selection_state[rel_path]
