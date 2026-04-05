@@ -50,12 +50,15 @@ except ImportError:
     PIL_IMPORT_ERROR = str(sys.exc_info()[1] or "")
 
 
-# 单实例互斥锁名称
-SINGLE_INSTANCE_MUTEX_NAME = "Global\\AICodeFeeder_SingleInstance_v1_8_0"
+# 单实例互斥锁名称（版本号更新）
+SINGLE_INSTANCE_MUTEX_NAME = "Global\\AICodeFeeder_SingleInstance_v1_8_1"
+
+# 托盘图标唯一标识
+TRAY_ICON_ID = "AICodeFeeder_v181"
 
 
 class SingleInstanceService:
-    """单实例检测服务 - 使用 Windows 互斥锁"""
+    """单实例检测服务 - 使用 Windows 互斥锁（ctypes 实现，无外部依赖）"""
 
     def __init__(self):
         self.mutex_handle = None
@@ -63,23 +66,26 @@ class SingleInstanceService:
 
     def try_acquire(self):
         """
-        尝试获取单实例锁
+        尝试获取单实例锁（使用 ctypes 直接调用 Windows API）
         返回 True 表示是第一个实例，False 表示已有其他实例运行
         """
-        if not HAS_PYWIN32:
-            # 没有 pywin32 时无法检测，默认允许运行
-            return True
-
         try:
-            self.mutex_handle = win32api.CreateMutex(
+            # 使用 ctypes 创建 Mutex，不依赖 pywin32
+            ERROR_ALREADY_EXISTS = 183
+
+            # CreateMutexW 参数：lpSecurityAttributes(NULL), bInitialOwner(False), lpName
+            self.mutex_handle = ctypes.windll.kernel32.CreateMutexW(
                 None,
                 False,
                 SINGLE_INSTANCE_MUTEX_NAME
             )
-            # 检查是否已存在
-            last_error = win32api.GetLastError()
-            # ERROR_ALREADY_EXISTS = 183
-            if last_error == 183:
+
+            if not self.mutex_handle:
+                # 创建失败，允许运行
+                return True
+
+            last_error = ctypes.windll.kernel32.GetLastError()
+            if last_error == ERROR_ALREADY_EXISTS:
                 self.is_first_instance = False
                 return False
             else:
@@ -93,7 +99,7 @@ class SingleInstanceService:
         """释放互斥锁"""
         if self.mutex_handle and self.is_first_instance:
             try:
-                win32api.CloseHandle(self.mutex_handle)
+                ctypes.windll.kernel32.CloseHandle(self.mutex_handle)
             except Exception:
                 pass
         self.mutex_handle = None
@@ -101,38 +107,48 @@ class SingleInstanceService:
     def notify_existing_instance(self):
         """
         通知已存在的实例显示窗口
-        通过查找并激活现有窗口实现
+        通过多种方式查找并激活现有窗口
         """
         try:
-            # 尝试找到现有窗口并激活
-            hwnd = ctypes.windll.user32.FindWindowW(None, None)
-            # 通过窗口标题查找
             target_title_prefix = "AI CodeFeeder"
-            ctypes.windll.user32.EnumWindows(
-                ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)(
-                    lambda hwnd, lParam: self._find_and_activate_window(hwnd, target_title_prefix)
-                ),
-                0
-            )
+            found = False
+
+            # 方法1: 通过窗口标题前缀查找（Tk 窗口标题通常包含版本信息）
+            hwnd = ctypes.windll.user32.FindWindowW(None, None)
+
+            # 方法2: 枚举所有窗口查找标题前缀匹配
+            @ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+            def enum_callback(hwnd, lParam):
+                try:
+                    length = ctypes.windll.user32.GetWindowTextLengthW(hwnd)
+                    if length > 0:
+                        buffer = ctypes.create_unicode_buffer(length + 1)
+                        ctypes.windll.user32.GetWindowTextW(hwnd, buffer, length + 1)
+                        title = buffer.value
+                        if title.startswith(target_title_prefix):
+                            # 找到了，激活窗口
+                            self._activate_window(hwnd)
+                            return False  # 停止枚举
+                except Exception:
+                    pass
+                return True  # 继续枚举
+
+            ctypes.windll.user32.EnumWindows(enum_callback, 0)
         except Exception:
             pass
 
-    def _find_and_activate_window(self, hwnd, target_prefix):
-        """查找并激活目标窗口"""
+    def _activate_window(self, hwnd):
+        """激活指定窗口"""
         try:
-            length = ctypes.windll.user32.GetWindowTextLengthW(hwnd)
-            if length > 0:
-                buffer = ctypes.create_unicode_buffer(length + 1)
-                ctypes.windll.user32.GetWindowTextW(hwnd, buffer, length + 1)
-                title = buffer.value
-                if title.startswith(target_prefix):
-                    # 找到了，激活窗口
-                    ctypes.windll.user32.SetForegroundWindow(hwnd)
-                    ctypes.windll.user32.ShowWindow(hwnd, 9)  # SW_RESTORE
-                    return False  # 停止枚举
+            # 先恢复窗口（如果是最小化或隐藏状态）
+            ctypes.windll.user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+            # 设置为前台窗口
+            ctypes.windll.user32.SetForegroundWindow(hwnd)
+            # 确保窗口可见
+            ctypes.windll.user32.ShowWindow(hwnd, 5)  # SW_SHOW
+            return True
         except Exception:
-            pass
-        return True  # 继续枚举
+            return False
 
 
 def is_frozen_exe():
@@ -220,6 +236,7 @@ class SystemTrayService:
         self.toggle_startup = toggle_startup
         self.on_register = on_register  # 注册菜单回调
         self.icon = None
+        self._running = False
 
     def _create_image(self):
         if not HAS_PIL:
@@ -247,6 +264,10 @@ class SystemTrayService:
         if not HAS_PYSTRAY or not HAS_PIL:
             return False
 
+        # 防止重复启动
+        if self._running:
+            return True
+
         # 构建菜单
         menu_items = [
             pystray.MenuItem("显示主界面", self.on_show, default=True),
@@ -266,13 +287,27 @@ class SystemTrayService:
         ])
 
         menu = pystray.Menu(*menu_items)
-        self.icon = pystray.Icon("AICodeFeeder", self._create_image(), "AI CodeFeeder", menu)
-        threading.Thread(target=self.icon.run, daemon=True).start()
+        self.icon = pystray.Icon(TRAY_ICON_ID, self._create_image(), "AI CodeFeeder", menu)
+        self._running = True
+        threading.Thread(target=self._run_icon, daemon=True).start()
         return True
 
+    def _run_icon(self):
+        """托盘图标运行线程"""
+        try:
+            self.icon.run()
+        except Exception:
+            pass
+        self._running = False
+
     def stop(self):
-        if self.icon:
-            self.icon.stop()
+        if self.icon and self._running:
+            try:
+                self.icon.stop()
+            except Exception:
+                pass
+        self._running = False
+        self.icon = None
 
     def _on_toggle_startup(self, icon, item):
         self.toggle_startup(icon, item)

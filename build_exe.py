@@ -11,11 +11,14 @@ def build():
     project_dir = os.path.dirname(os.path.abspath(__file__))
     os.chdir(project_dir)
 
-    # 清理旧构建
+    # 清理旧构建（忽略删除失败）
     for folder in ['build', 'dist']:
         if os.path.exists(folder):
-            shutil.rmtree(folder)
-            print(f"清理旧目录: {folder}")
+            try:
+                shutil.rmtree(folder)
+                print(f"清理旧目录: {folder}")
+            except PermissionError:
+                print(f"警告: {folder} 目录被占用，跳过清理")
 
     # 单 exe 打包
     params = [

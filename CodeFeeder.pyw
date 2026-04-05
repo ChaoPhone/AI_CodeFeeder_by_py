@@ -120,17 +120,9 @@ def bootstrap_source_mode():
             sys.exit(1)
 
 
-def start_main_app(init_path=None, launch_source="manual"):
+def start_main_app(init_path=None, launch_source="manual", single_instance=None):
     """启动主应用"""
     from AppUI.MainWindow import CodeFeederApp
-    from AppUI.SystemServices import SingleInstanceService
-
-    # 单实例检测
-    single_instance = SingleInstanceService()
-    if not single_instance.try_acquire():
-        # 已有实例运行，尝试激活并退出
-        single_instance.notify_existing_instance()
-        sys.exit(0)
 
     root = tk.Tk()
     app = CodeFeederApp(root, init_path, launch_source=launch_source, single_instance=single_instance)
@@ -147,6 +139,14 @@ def start_main_app(init_path=None, launch_source="manual"):
 def main():
     init_path, launch_source = resolve_launch_context()
 
+    # 单实例检测必须在创建任何 Tk 窗口之前
+    from AppUI.SystemServices import SingleInstanceService
+    single_instance = SingleInstanceService()
+    if not single_instance.try_acquire():
+        # 已有实例运行，尝试激活并退出
+        single_instance.notify_existing_instance()
+        sys.exit(0)
+
     if is_frozen_exe():
         # exe 模式：简化启动流程
         from Core.Installer import check_first_run_and_prompt
@@ -157,16 +157,17 @@ def main():
 
         if not check_first_run_and_prompt(temp_root):
             temp_root.destroy()
+            single_instance.release()
             sys.exit(0)  # 正在注册，会重启
 
         temp_root.destroy()
-        start_main_app(init_path, launch_source)
+        start_main_app(init_path, launch_source, single_instance)
 
     else:
         # 源码模式：完整的 venv 和依赖处理
         ensure_venv_runtime()
         bootstrap_source_mode()
-        start_main_app(init_path, launch_source)
+        start_main_app(init_path, launch_source, single_instance)
 
 
 if __name__ == "__main__":

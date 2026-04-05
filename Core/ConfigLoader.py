@@ -6,15 +6,51 @@ import os
 import sys
 
 
-def get_config_path():
-    """获取 config.json 路径，兼容 exe 和源码模式"""
+def get_appdata_dir():
+    """获取应用数据目录（exe模式使用C盘AppData）"""
     if getattr(sys, 'frozen', False):
-        # exe 模式：从 _MEIPASS 读取
+        # exe 模式：使用 AppData\Roaming\AICodeFeeder
+        appdata = os.environ.get('APPDATA', os.path.expanduser('~'))
+        cache_dir = os.path.join(appdata, 'AICodeFeeder')
+        if not os.path.exists(cache_dir):
+            os.makedirs(cache_dir, exist_ok=True)
+        return cache_dir
+    else:
+        # 源码模式：使用项目根目录
+        return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def get_config_read_path():
+    """获取 config.json 读取路径（exe模式从内置资源读取默认配置）"""
+    if getattr(sys, 'frozen', False):
+        # exe 模式：从 _MEIPASS 读取内置默认配置
         base_dir = sys._MEIPASS
+        return os.path.join(base_dir, 'Core', 'config.json')
     else:
         # 源码模式：从项目根目录读取
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    return os.path.join(base_dir, 'Core', 'config.json')
+        return os.path.join(base_dir, 'Core', 'config.json')
+
+
+def get_config_write_path():
+    """获取 config.json 写入路径"""
+    if getattr(sys, 'frozen', False):
+        # exe 模式：保存到 AppData\Roaming\AICodeFeeder
+        return os.path.join(get_appdata_dir(), 'config.json')
+    else:
+        # 源码模式：保存到项目根目录
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        return os.path.join(base_dir, 'Core', 'config.json')
+
+
+def get_config_path():
+    """获取 config.json 路径（兼容旧接口）"""
+    # 优先读取用户保存的配置
+    write_path = get_config_write_path()
+    if os.path.exists(write_path):
+        return write_path
+    # 否则读取内置默认配置
+    return get_config_read_path()
 
 
 class Config:
@@ -82,10 +118,17 @@ def validate_config_data(data):
 
 def read_config_text():
     """读取配置文件原始文本"""
-    config_path = get_config_path()
-    if not os.path.exists(config_path):
+    # 优先读取用户保存的配置
+    write_path = get_config_write_path()
+    if os.path.exists(write_path):
+        with open(write_path, 'r', encoding='utf-8') as f:
+            return f.read()
+
+    # 否则读取内置默认配置
+    read_path = get_config_read_path()
+    if not os.path.exists(read_path):
         return "{}"
-    with open(config_path, 'r', encoding='utf-8') as f:
+    with open(read_path, 'r', encoding='utf-8') as f:
         return f.read()
 
 
@@ -95,7 +138,12 @@ def save_config_text(raw_text):
     data = validate_config_data(data)
     normalized_text = json.dumps(data, ensure_ascii=False, indent=2)
 
-    config_path = get_config_path()
+    # 确保目录存在
+    config_path = get_config_write_path()
+    config_dir = os.path.dirname(config_path)
+    if not os.path.exists(config_dir):
+        os.makedirs(config_dir, exist_ok=True)
+
     with open(config_path, 'w', encoding='utf-8') as f:
         f.write(normalized_text + "\n")
 

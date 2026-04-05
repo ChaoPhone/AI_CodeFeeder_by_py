@@ -206,15 +206,18 @@ class CodeFeederApp:
             self._update_item_visual(rel_path, is_selected)
 
     def _get_visual_selected_state(self, rel_path):
+        """获取视觉选中状态（与折叠状态完全解耦）"""
         widgets = self.path_to_label.get(rel_path)
         if not widgets:
-            return self.selection_state.get(rel_path, False)
+            return True  # 默认选中
         if widgets["is_file"]:
-            return self.selection_state.get(rel_path, False)
+            return self.selection_state.get(rel_path, True)  # 文件：从选择状态获取
+        # 文件夹：检查所有子文件的选中状态（不关心是否折叠）
         affected_files = [path for path in self.all_files_map if path.startswith(rel_path + os.sep)]
         if not affected_files:
-            return False
-        return any(self.selection_state.get(path, False) for path in affected_files)
+            return True  # 空文件夹默认选中
+        # 只要有一个子文件选中，文件夹就显示为选中状态
+        return any(self.selection_state.get(path, True) for path in affected_files)
 
     def _on_hotkey_triggered(self):
         self.root.after(0, self._handle_hotkey)
@@ -232,8 +235,6 @@ class CodeFeederApp:
             self.target_dir = os.path.abspath(os.path.normpath(path))
             self._update_path_display(self.target_dir)
             self.refresh_file_list()
-        else:
-            messagebox.showinfo("快捷键触发", "已识别快捷键 Ctrl+`\n\n请确保当前已打开 Windows 资源管理器窗口，或选中了某个文件夹。")
 
     def _toggle_startup(self, icon, item):
         current_state = StartupService.is_startup_enabled()
@@ -640,7 +641,7 @@ class CodeFeederApp:
 
         self.settings_window = tk.Toplevel(self.root)
         self.settings_window.title("设置")
-        self.settings_window.geometry("1000x750")
+        self.settings_window.geometry("700x600")
         self.settings_window.configure(bg=COLORS["bg_main"])
         self.settings_window.transient(self.root)
         self.settings_window.grab_set()
@@ -651,11 +652,10 @@ class CodeFeederApp:
 
         # 加载配置数据
         self.temp_config_data = json.loads(read_config_text())
-        self.settings_mode_var = tk.StringVar(value=self.temp_config_data.get("default_mode", "normal"))
+        self.settings_mode_var = tk.StringVar(value=self.temp_config_data.get("default_mode", "gap"))
         self.settings_timeout_var = tk.StringVar(value=str(self.temp_config_data.get("full_load_timeout_seconds", 5)))
         self.settings_max_files_var = tk.StringVar(value=str(self.temp_config_data.get("full_load_max_files", 2500)))
         self.settings_save_txt_var = tk.BooleanVar(value=self.temp_config_data.get("save_txt", False))
-        self.settings_tab_var = tk.StringVar(value="general")
 
         # 底部按钮栏（先 pack，固定在底部）
         btn_bar = tk.Frame(self.settings_window, bg=COLORS["bg_panel"], height=50)
@@ -669,63 +669,142 @@ class CodeFeederApp:
         tk.Button(btn_inner, text="保存配置", command=self._save_settings_config, bg=COLORS["accent"], fg=COLORS["fg_heading"], relief=tk.FLAT, activebackground=COLORS["accent_hov"], activeforeground=COLORS["fg_heading"], font=FONTS["ui_bold"], cursor="hand2").pack(side=tk.LEFT)
         tk.Button(btn_inner, text="关闭", command=self._close_settings, bg=COLORS["bg_hover"], fg=COLORS["fg_text"], relief=tk.FLAT, activebackground=COLORS["bg_selected"], activeforeground=COLORS["fg_heading"], font=FONTS["ui"], cursor="hand2").pack(side=tk.RIGHT)
 
-        # 主容器（占据剩余空间）
+        # 主容器（带滚动支持）
         container = tk.Frame(self.settings_window, bg=COLORS["bg_main"])
         container.pack(fill=tk.BOTH, expand=True)
 
-        # 左侧边栏 (~200px)
-        sidebar = tk.Frame(container, bg=COLORS["bg_panel"], width=200)
-        sidebar.pack(side=tk.LEFT, fill=tk.Y)
-        sidebar.pack_propagate(False)
+        # Canvas + Scrollbar
+        self.settings_canvas = tk.Canvas(container, bg=COLORS["bg_main"], highlightthickness=0)
+        self.settings_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        # 侧边栏标题
-        tk.Label(sidebar, text="设置", bg=COLORS["bg_panel"], fg=COLORS["fg_heading"], font=FONTS["h2"]).pack(anchor="w", padx=16, pady=(16, 12))
+        scrollbar = tk.Scrollbar(container, orient="vertical", command=self.settings_canvas.yview, bg=COLORS["bg_panel"], troughcolor=COLORS["bg_main"])
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
-        # 侧边栏按钮列表
-        self.settings_tab_btns = {}
-        tab_items = [
-            ("general", "常规设置"),
-            ("scan", "扫描规则"),
-            ("perf", "性能阈值"),
-        ]
-        for tab_id, tab_name in tab_items:
-            btn_frame = tk.Frame(sidebar, bg=COLORS["bg_panel"], cursor="hand2")
-            btn_frame.pack(fill=tk.X, pady=1)
+        self.settings_canvas.configure(yscrollcommand=scrollbar.set)
 
-            btn_label = tk.Label(btn_frame, text=tab_name, bg=COLORS["bg_panel"], fg=COLORS["fg_text"], font=FONTS["ui"], anchor="w", padx=16, pady=10)
-            btn_label.pack(fill=tk.X)
+        # 内容 Frame
+        self.settings_content_frame = tk.Frame(self.settings_canvas, bg=COLORS["bg_main"], padx=24, pady=20)
+        self.settings_canvas_window = self.settings_canvas.create_window((0, 0), window=self.settings_content_frame, anchor="nw")
 
-            self.settings_tab_btns[tab_id] = {"frame": btn_frame, "label": btn_label}
+        # 绑定事件
+        self.settings_canvas.bind("<Configure>", self._on_settings_canvas_configure)
+        self.settings_content_frame.bind("<Configure>", self._on_settings_content_configure)
+        self.settings_canvas.bind("<Mousewheel>", self._on_settings_mousewheel)
+        # 鼠标进入canvas时绑定滚轮
+        self.settings_canvas.bind("<Enter>", lambda e: self.settings_canvas.bind_all("<Mousewheel>", self._on_settings_mousewheel))
+        self.settings_canvas.bind("<Leave>", lambda e: self.settings_canvas.unbind_all("<Mousewheel>"))
 
-            def on_tab_click(e, tid=tab_id):
-                self._switch_settings_tab(tid)
+        # 渲染全量设置内容
+        self._render_all_settings()
 
-            def on_tab_enter(e, tid=tab_id):
-                if self.settings_tab_var.get() != tid:
-                    self.settings_tab_btns[tid]["frame"].config(bg=COLORS["bg_hover"])
-                    self.settings_tab_btns[tid]["label"].config(bg=COLORS["bg_hover"])
+    def _on_settings_canvas_configure(self, event):
+        """调整内容区域宽度"""
+        self.settings_canvas.itemconfig(self.settings_canvas_window, width=event.width)
 
-            def on_tab_leave(e, tid=tab_id):
-                if self.settings_tab_var.get() != tid:
-                    self.settings_tab_btns[tid]["frame"].config(bg=COLORS["bg_panel"])
-                    self.settings_tab_btns[tid]["label"].config(bg=COLORS["bg_panel"])
+    def _on_settings_content_configure(self, event):
+        """更新滚动区域"""
+        self.settings_canvas.configure(scrollregion=self.settings_canvas.bbox("all"))
 
-            btn_frame.bind("<Button-1>", on_tab_click)
-            btn_label.bind("<Button-1>", on_tab_click)
-            btn_frame.bind("<Enter>", on_tab_enter)
-            btn_frame.bind("<Leave>", on_tab_leave)
-            btn_label.bind("<Enter>", on_tab_enter)
-            btn_label.bind("<Leave>", on_tab_leave)
+    def _on_settings_mousewheel(self, event):
+        """鼠标滚轮滚动"""
+        self.settings_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
 
-        # 右侧内容区域（使用简单 Frame，无需 Canvas 滚动）
-        self.settings_content_frame = tk.Frame(container, bg=COLORS["bg_main"], padx=24, pady=20)
-        self.settings_content_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+    def _render_all_settings(self):
+        """渲染全部设置内容"""
+        parent = self.settings_content_frame
 
-        # 初始化内容
-        self._switch_settings_tab("general")
+        # --- 常规设置 ---
+        tk.Label(parent, text="常规设置", bg=COLORS["bg_main"], fg=COLORS["fg_heading"], font=FONTS["h2"]).pack(anchor="w", pady=(0, 4))
+        tk.Label(parent, text="配置默认行为与输出选项", bg=COLORS["bg_main"], fg=COLORS["fg_secondary"], font=FONTS["ui"]).pack(anchor="w", pady=(0, 12))
 
-        # 更新初始选中状态
-        self._update_settings_tab_visual("general")
+        # 默认输出模式
+        mode_panel = RoundedFrame(parent, radius=8)
+        mode_panel.pack(fill=tk.X, pady=(0, 12))
+        mode_inner = mode_panel.inner_frame
+
+        tk.Label(mode_inner, text="默认输出模式", bg=COLORS["bg_panel"], fg=COLORS["fg_heading"], font=FONTS["ui_bold"]).pack(anchor="w", padx=12, pady=(12, 4))
+        mode_opts = tk.Frame(mode_inner, bg=COLORS["bg_panel"])
+        mode_opts.pack(fill=tk.X, padx=12, pady=(4, 12))
+        for mode_val, mode_label in [("normal", "普通"), ("gap", "简洁"), ("skeleton", "骨架")]:
+            tk.Radiobutton(mode_opts, text=mode_label, variable=self.settings_mode_var, value=mode_val, bg=COLORS["bg_panel"], fg=COLORS["fg_text"], selectcolor=COLORS["bg_input"], activebackground=COLORS["bg_panel"], activeforeground=COLORS["accent"], font=FONTS["ui"], cursor="hand2").pack(side=tk.LEFT, padx=8)
+
+        # 输出选项
+        output_panel = RoundedFrame(parent, radius=8)
+        output_panel.pack(fill=tk.X, pady=(0, 20))
+        output_inner = output_panel.inner_frame
+
+        tk.Label(output_inner, text="输出选项", bg=COLORS["bg_panel"], fg=COLORS["fg_heading"], font=FONTS["ui_bold"]).pack(anchor="w", padx=12, pady=(12, 4))
+        tk.Checkbutton(output_inner, text="同时生成 .txt 文件", variable=self.settings_save_txt_var, bg=COLORS["bg_panel"], fg=COLORS["fg_text"], selectcolor=COLORS["bg_input"], activebackground=COLORS["bg_panel"], activeforeground=COLORS["accent"], font=FONTS["ui"], cursor="hand2").pack(anchor="w", padx=12, pady=(4, 12))
+
+        # --- 扫描规则 ---
+        tk.Label(parent, text="扫描规则", bg=COLORS["bg_main"], fg=COLORS["fg_heading"], font=FONTS["h2"]).pack(anchor="w", pady=(20, 4))
+        tk.Label(parent, text="定义扫描时允许的文件类型与忽略的目录", bg=COLORS["bg_main"], fg=COLORS["fg_secondary"], font=FONTS["ui"]).pack(anchor="w", pady=(0, 12))
+
+        # 允许的后缀
+        ext_panel = RoundedFrame(parent, radius=8)
+        ext_panel.pack(fill=tk.X, pady=(0, 12))
+        ext_inner = ext_panel.inner_frame
+
+        tk.Label(ext_inner, text="允许的文件后缀", bg=COLORS["bg_panel"], fg=COLORS["fg_heading"], font=FONTS["ui_bold"]).pack(anchor="w", padx=12, pady=(12, 4))
+        tk.Label(ext_inner, text="点击 ✕ 移除，在输入框输入并按 Enter 添加", bg=COLORS["bg_panel"], fg=COLORS["fg_secondary"], font=("Microsoft YaHei UI", 9)).pack(anchor="w", padx=12, pady=(4, 4))
+
+        self.ext_tag_cloud = TagCloudFrame(
+            ext_inner,
+            items=self.temp_config_data.get("allowed_extensions", []),
+            on_remove_item=lambda x: None,
+            on_add_item=lambda x: None,
+            add_placeholder="添加后缀...",
+            max_per_row=8,
+            bg=COLORS["bg_panel"]
+        )
+        self.ext_tag_cloud.pack(fill=tk.X, padx=12, pady=(4, 12))
+
+        # 忽略目录
+        ignore_panel = RoundedFrame(parent, radius=8)
+        ignore_panel.pack(fill=tk.X, pady=(0, 20))
+        ignore_inner = ignore_panel.inner_frame
+
+        tk.Label(ignore_inner, text="忽略的目录", bg=COLORS["bg_panel"], fg=COLORS["fg_heading"], font=FONTS["ui_bold"]).pack(anchor="w", padx=12, pady=(12, 4))
+        tk.Label(ignore_inner, text="扫描时跳过这些目录", bg=COLORS["bg_panel"], fg=COLORS["fg_secondary"], font=("Microsoft YaHei UI", 9)).pack(anchor="w", padx=12, pady=(4, 4))
+
+        self.ignore_tag_cloud = TagCloudFrame(
+            ignore_inner,
+            items=self.temp_config_data.get("ignore_dirs", []),
+            on_remove_item=lambda x: None,
+            on_add_item=lambda x: None,
+            add_placeholder="添加目录...",
+            max_per_row=8,
+            bg=COLORS["bg_panel"]
+        )
+        self.ignore_tag_cloud.pack(fill=tk.X, padx=12, pady=(4, 12))
+
+        # --- 性能阈值 ---
+        tk.Label(parent, text="性能阈值", bg=COLORS["bg_main"], fg=COLORS["fg_heading"], font=FONTS["h2"]).pack(anchor="w", pady=(20, 4))
+        tk.Label(parent, text="控制全量扫描的超时时间与最大文件数量限制", bg=COLORS["bg_main"], fg=COLORS["fg_secondary"], font=FONTS["ui"]).pack(anchor="w", pady=(0, 12))
+
+        perf_panel = RoundedFrame(parent, radius=8)
+        perf_panel.pack(fill=tk.X)
+        perf_inner = perf_panel.inner_frame
+
+        tk.Label(perf_inner, text="扫描限制", bg=COLORS["bg_panel"], fg=COLORS["fg_heading"], font=FONTS["ui_bold"]).pack(anchor="w", padx=12, pady=(12, 8))
+
+        # 水平并列放置两个设置项
+        opts_frame = tk.Frame(perf_inner, bg=COLORS["bg_panel"])
+        opts_frame.pack(fill=tk.X, padx=12, pady=(4, 12))
+
+        # 扫描超时
+        timeout_frame = tk.Frame(opts_frame, bg=COLORS["bg_panel"])
+        timeout_frame.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        tk.Label(timeout_frame, text="扫描超时 (秒):", bg=COLORS["bg_panel"], fg=COLORS["fg_text"], font=FONTS["ui"]).pack(anchor="w")
+        timeout_spin = tk.Spinbox(timeout_frame, from_=1, to=30, width=8, textvariable=self.settings_timeout_var, bg=COLORS["bg_input"], fg=COLORS["fg_text"], relief=tk.FLAT, font=FONTS["ui"])
+        timeout_spin.pack(anchor="w", pady=(4, 0))
+
+        # 最大文件数
+        maxfiles_frame = tk.Frame(opts_frame, bg=COLORS["bg_panel"])
+        maxfiles_frame.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(24, 0))
+        tk.Label(maxfiles_frame, text="最大文件数:", bg=COLORS["bg_panel"], fg=COLORS["fg_text"], font=FONTS["ui"]).pack(anchor="w")
+        maxfiles_spin = tk.Spinbox(maxfiles_frame, from_=100, to=10000, increment=100, width=8, textvariable=self.settings_max_files_var, bg=COLORS["bg_input"], fg=COLORS["fg_text"], relief=tk.FLAT, font=FONTS["ui"])
+        maxfiles_spin.pack(anchor="w", pady=(4, 0))
 
     def _switch_settings_tab(self, tab_id):
         """切换设置页面选项卡"""
@@ -900,7 +979,10 @@ class CodeFeederApp:
 
         try:
             save_config_text(json.dumps(self.temp_config_data, ensure_ascii=False, indent=2))
-            self._reload_runtime_config(preserve_mode=True)
+            # 保存后更新主界面的模式（不保留旧模式）
+            self._reload_runtime_config(preserve_mode=False)
+            self.mode_var.set(self._sanitize_mode(self.temp_config_data.get("default_mode", "normal")))
+            self._update_settings_summary()
             self._reload_settings_from_file()
             self._set_status("config.json 已保存并重新加载。", reset_after_ms=5000)
             if self.current_input_path and os.path.exists(self.current_input_path):
