@@ -1,7 +1,7 @@
 ***
-# 🚀 AI_CodeFeeder (V1.8.0 单文件版)
+# 🚀 AI_CodeFeeder (V1.9.7 重构版)
 
-![Version](https://img.shields.io/badge/version-1.8.0-blue.svg)
+![Version](https://img.shields.io/badge/version-1.9.7-blue.svg)
 ![Build](https://img.shields.io/badge/build-passing-brightgreen.svg)
 ![Python](https://img.shields.io/badge/python-3.x-blue.svg)
 ![Tkinter](https://img.shields.io/badge/UI-Tkinter-orange.svg)
@@ -83,10 +83,20 @@ AI_CodeFeeder/
 │   ├── ConfigLoader.py     # 配置加载
 │   ├── Analyzer.py         # 文件扫描处理
 │   ├── CodeCleaner.py      # 代码清洗算法
+│   ├── services/           # 服务层
+│   │   ├── ConfigService.py
+│   │   ├── HotkeyService.py
+│   │   ├── TrayService.py
+│   │   └── StartupService.py
 │   └── config.json         # 配置文件
 └── AppUI/
     ├── MainWindow.py       # 主窗口控制器
-    ├── SystemServices.py   # 系统服务（托盘/热键）
+    ├── controllers/        # 控制器层
+    │   ├── ScanController.py
+    │   ├── GenerateController.py
+    │   └── SettingsController.py
+    ├── models/             # 模型层
+    │   └── AppState.py
     ├── Views.py            # 视图层
     ├── Components.py       # UI组件库
     ├── Theme.py            # 视觉常量
@@ -131,6 +141,26 @@ python build_exe.py
 ---
 
 ## 👨‍💻 版本历史
+
+**V1.9.7** [配置修复版] 2026.04.12
+- 修复设置保存后配置不生效问题（ScanController manager 引用同步）
+- 修复大文件夹展开后消失问题（添加 user_expanded_folders 记忆）
+- 设置窗口扩大到 1000x800
+
+**V1.9.6** [设置页面修复版] 2026.04.12
+- 修复设置页面加载失败（移除分页逻辑，统一单页滚动式布局）
+- 修正默认配置值（default_mode=normal, save_txt=false）
+- 移除未使用的分页切换方法
+
+**V1.9.5** [架构重构版] 2026.04.11
+- 分离控制器层（ScanController, GenerateController, SettingsController）
+- 分离模型层（AppState）
+- 分离服务层（ConfigService, HotkeyService, TrayService, StartupService）
+- MVC 架构清晰化
+
+**V1.9.0-V1.9.4** [重构迭代版] 2026.04.10-11
+- 逐步重构架构，分离关注点
+- 优化代码组织，提升可维护性
 
 **V1.8.0** [单文件版] 2026.04.05
 - 简化为单个 exe，首次运行自动注册
