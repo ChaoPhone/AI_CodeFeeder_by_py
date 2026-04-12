@@ -12,10 +12,14 @@ import ctypes
 from Core.ConfigLoader import load_config, read_config_text, save_config_text
 from Core.Analyzer import ProjectManager
 from Core.Installer import is_frozen_exe, is_context_menu_registered, register_context_menu
+from Core.error_handler import ErrorHandler
+from Core.thread_manager import ThreadManager
 from .Tree import TreeBuilder
 from .Theme import COLORS, FONTS
 from .Views import MainView
 from .Components import RoundedFrame, RoundedButton, TagCloudFrame
+from .models import AppState
+from .controllers import ScanController, GenerateController, SettingsController
 from .SystemServices import (
     set_win11_corners,
     SystemHotkeyService,
@@ -32,7 +36,7 @@ from .SystemServices import (
 class CodeFeederApp:
     def __init__(self, root, initial_path=None, launch_source="manual", single_instance=None):
         self.root = root
-        self.single_instance = single_instance  # 单实例锁
+        self.single_instance = single_instance
         self.cfg = load_config()
         self.manager = ProjectManager(self.cfg)
 
@@ -40,24 +44,23 @@ class CodeFeederApp:
         self.root.geometry("1400x1000")
         self.root.configure(bg=COLORS["bg_main"])
 
-        # 状态变量
-        self.is_topmost = False
-        self.target_dir = os.path.abspath(os.path.normpath(initial_path)) if initial_path else None
-        self.current_input_path = self.target_dir
-        self.current_root_path = None
-        self.last_path_source = launch_source
-        self.scan_request_id = 0
-        self.is_scanning = False
-        self.status_reset_job = None
-        self.scan_cancel_event = None  # 扫描取消信号
+        ErrorHandler.setup(log_dir=os.path.join(os.path.dirname(__file__), "..", "logs"), root_window=root)
 
-        self.all_files_map = {}
-        self.selection_state = {}
+        self.state = AppState()
+        self.state.set_path(
+            os.path.abspath(os.path.normpath(initial_path)) if initial_path else None,
+            launch_source
+        )
+        self.state.set_output_mode(self._sanitize_mode(self.cfg.default_mode))
+
+        self.current_input_path = self.state.target_dir
+        self.current_root_path = None
+        self.scan_request_id = 0
+        self.status_reset_job = None
+
         self.path_to_label = {}
         self.mode_var = tk.StringVar(value=self._sanitize_mode(self.cfg.default_mode))
-        self.whitelist_mode = False
         self.progress_var = tk.IntVar(value=0)
-        self.collapsed_folders = set()
 
         self.progress_bar = None
         self.status_label = None
@@ -67,7 +70,26 @@ class CodeFeederApp:
         self.ignore_tag_cloud = None
         self.tray_available = False
 
-        # 初始化系统服务
+        self.scan_controller = ScanController(
+            self.manager, self.state,
+            on_complete=self._on_scan_complete_wrapper,
+            on_error=self._on_scan_error_wrapper,
+            on_progress=self._on_scan_progress
+        )
+
+        self.generate_controller = GenerateController(
+            self.manager, self.state, self.cfg,
+            on_success=self._on_generate_success_wrapper,
+            on_error=self._on_generate_error_wrapper,
+            on_progress=self._on_generate_progress
+        )
+
+        self.settings_controller = SettingsController(
+            self.state,
+            on_config_changed=self._on_config_changed,
+            on_status_update=self._set_status
+        )
+
         self.hotkey_service = SystemHotkeyService(self._on_hotkey_triggered)
         self.tray_service = SystemTrayService(
             on_show=self._show_window,
@@ -77,35 +99,60 @@ class CodeFeederApp:
             on_register=self._register_from_tray
         )
 
-        # 设置 Win11 视觉效果
         self.root.update()
         set_win11_corners(ctypes.windll.user32.GetParent(self.root.winfo_id()))
 
-        # 构建 UI
         self.view = MainView(self.root, self)
 
-        # 快捷引用
         self.path_entry = self.view.path_entry
         self.canvas = self.view.canvas
         self.scroll_frame = self.view.scroll_frame
         self.btn_gen = self.view.btn_gen
 
-        # 启动服务
         self.hotkey_service.start()
         self.tray_available = self.tray_service.start()
         self._notify_missing_dependencies()
 
-        # 事件绑定
         self.root.bind("<Return>", lambda e: self.on_generate_click())
         self.root.protocol("WM_DELETE_WINDOW", self._on_close if self.tray_available else self._quit_app)
 
-        # 初始路径加载
-        if self.target_dir:
-            self._update_path_display(self.target_dir)
+        if self.state.target_dir:
+            self._update_path_display(self.state.target_dir)
             self.refresh_file_list()
 
         self.mode_var.trace_add("write", lambda *args: self._update_settings_summary())
         self._update_settings_summary()
+
+    def _on_config_changed(self):
+        self._reload_runtime_config(preserve_mode=False)
+        self.mode_var.set(self._sanitize_mode(self.cfg.default_mode))
+        self._update_settings_summary()
+        if self.current_input_path and os.path.exists(self.current_input_path):
+            self.refresh_file_list()
+
+    def _on_scan_complete_wrapper(self, result):
+        self.root.after(0, lambda: self._on_scan_complete(self.scan_request_id, result))
+
+    def _on_scan_error_wrapper(self, message):
+        self.root.after(0, lambda: self._on_scan_error(self.scan_request_id, message))
+
+    def _on_scan_progress(self, message):
+        self.root.after(0, lambda: self._set_status(message))
+
+    def _on_generate_success_wrapper(self, path, token_count, reveal_source):
+        self.root.after(0, lambda: self._on_generate_success(path, token_count, reveal_source))
+
+    def _on_generate_error_wrapper(self, message):
+        self.root.after(0, lambda: self._on_generate_error(message))
+
+    def _on_generate_success(self, path, token_count, reveal_source):
+        self._on_success(path, token_count, reveal_source)
+
+    def _on_generate_error(self, message):
+        self._on_error(message)
+
+    def _on_generate_progress(self, percent):
+        self.root.after(0, lambda: self.progress_var.set(percent))
 
     def _get_version_title(self):
         if self.cfg.version_info:
@@ -188,16 +235,12 @@ class CodeFeederApp:
         pass
 
     def toggle_whitelist_mode(self):
-        self.whitelist_mode = not self.whitelist_mode
+        new_mode = self.state.toggle_whitelist_mode()
         if hasattr(self, "whitelist_btn"):
-            if self.whitelist_mode:
+            if new_mode:
                 self.whitelist_btn.config(bg=COLORS["accent"], text="✓ 白名单")
             else:
                 self.whitelist_btn.config(bg=COLORS["bg_hover"], text="白名单")
-
-        new_default = not self.whitelist_mode
-        for rel_path in self.selection_state:
-            self.selection_state[rel_path] = new_default
         self._refresh_tree_visual()
 
     def _refresh_tree_visual(self):
@@ -206,18 +249,15 @@ class CodeFeederApp:
             self._update_item_visual(rel_path, is_selected)
 
     def _get_visual_selected_state(self, rel_path):
-        """获取视觉选中状态（与折叠状态完全解耦）"""
         widgets = self.path_to_label.get(rel_path)
         if not widgets:
-            return True  # 默认选中
+            return True
         if widgets["is_file"]:
-            return self.selection_state.get(rel_path, True)  # 文件：从选择状态获取
-        # 文件夹：检查所有子文件的选中状态（不关心是否折叠）
-        affected_files = [path for path in self.all_files_map if path.startswith(rel_path + os.sep)]
+            return self.state.selection_state.get(rel_path, True)
+        affected_files = [path for path in self.state.all_files_map if path.startswith(rel_path + os.sep)]
         if not affected_files:
-            return True  # 空文件夹默认选中
-        # 只要有一个子文件选中，文件夹就显示为选中状态
-        return any(self.selection_state.get(path, True) for path in affected_files)
+            return True
+        return any(self.state.selection_state.get(path, True) for path in affected_files)
 
     def _on_hotkey_triggered(self):
         self.root.after(0, self._handle_hotkey)
@@ -227,13 +267,12 @@ class CodeFeederApp:
         self._show_window()
         self.root.lift()
         self.root.attributes("-topmost", True)
-        self.root.after(100, lambda: self.root.attributes("-topmost", self.is_topmost))
+        self.root.after(100, lambda: self.root.attributes("-topmost", self.state.is_topmost))
         self.root.focus_force()
 
         if path and os.path.exists(path):
-            self.last_path_source = "hotkey"
-            self.target_dir = os.path.abspath(os.path.normpath(path))
-            self._update_path_display(self.target_dir)
+            self.state.set_path(os.path.abspath(os.path.normpath(path)), "hotkey")
+            self._update_path_display(self.state.target_dir)
             self.refresh_file_list()
 
     def _toggle_startup(self, icon, item):
@@ -293,9 +332,8 @@ class CodeFeederApp:
     def browse_dir(self):
         selected_dir = filedialog.askdirectory()
         if selected_dir:
-            self.last_path_source = "browse"
-            self.target_dir = os.path.abspath(os.path.normpath(selected_dir))
-            self._update_path_display(self.target_dir)
+            self.state.set_path(os.path.abspath(os.path.normpath(selected_dir)), "browse")
+            self._update_path_display(self.state.target_dir)
             self.refresh_file_list()
 
     def refresh_file_list(self):
@@ -312,54 +350,38 @@ class CodeFeederApp:
             self._restore_generate_button()
             return
 
-        # 取消之前的扫描
-        if self.scan_cancel_event:
-            self.scan_cancel_event.set()
+        if self.state.scan_cancel_event:
+            self.state.cancel_scan()
 
-        if norm_path != self.target_dir:
-            self.last_path_source = "manual"
-            self.target_dir = norm_path
+        if norm_path != self.state.target_dir:
+            self.state.set_path(norm_path, "manual")
 
         self.current_input_path = norm_path
         self.current_root_path = None
-        self.all_files_map.clear()
-        self.selection_state.clear()
+        self.state.reset_scan_state()
         self.path_to_label.clear()
-        self.collapsed_folders.clear()
 
         self.scan_request_id += 1
         scan_id = self.scan_request_id
-        self.is_scanning = True
-
-        # 创建新的取消信号
-        self.scan_cancel_event = threading.Event()
 
         self._set_scanning_state()
         self._show_tree_loading_placeholder("正在预加载项目文件...")
         self._set_status(f"正在扫描，最多等待 {self.cfg.full_load_timeout_seconds} 秒...")
 
-        threading.Thread(target=self._scan_thread, args=(norm_path, scan_id, self.scan_cancel_event), daemon=True).start()
-
-    def _scan_thread(self, path, scan_id, cancel_event):
-        try:
-            result = self.manager.scan_directory(path, cancel_event)
-            self.root.after(0, lambda: self._on_scan_complete(scan_id, result))
-        except Exception as e:
-            self.root.after(0, lambda: self._on_scan_error(scan_id, str(e)))
+        self.scan_controller.scan_path(norm_path)
 
     def _on_scan_complete(self, scan_id, result):
         if scan_id != self.scan_request_id:
             return
 
-        # 检查是否被取消
         if result.get("cancelled"):
-            self.is_scanning = False
+            self.state.is_scanning = False
             self._show_tree_message("扫描已取消。")
             self._set_status("扫描已取消。", reset_after_ms=4000)
             self._restore_generate_button()
             return
 
-        self.is_scanning = False
+        self.state.is_scanning = False
         self.current_input_path = result["requested_path"]
         self.current_root_path = result["root_path"]
         flat_files = result["files"]
@@ -371,16 +393,16 @@ class CodeFeederApp:
             self._restore_generate_button()
             return
 
-        default_selected = not self.whitelist_mode
-        visual_items, auto_collapsed = TreeBuilder.build_visual_data(flat_files, self.collapsed_folders)
-        self.collapsed_folders = auto_collapsed
+        visual_items, auto_collapsed = TreeBuilder.build_visual_data(flat_files, self.state.collapsed_folders)
+        self.state.collapsed_folders = auto_collapsed
+        
         for item in visual_items:
             if item["type"] == "file":
-                self.all_files_map[item["rel_path"]] = item["full_path"]
-                self.selection_state[item["rel_path"]] = default_selected
+                self.state.all_files_map[item["rel_path"]] = item["full_path"]
+                self.state.selection_state[item["rel_path"]] = not self.state.whitelist_mode
             self._create_tree_row(item)
 
-        collapsed_count = len(self.collapsed_folders)
+        collapsed_count = len(self.state.collapsed_folders)
         collapse_hint = f"，{collapsed_count} 个大文件夹已自动折叠" if collapsed_count > 0 else ""
         scan_mode_text = "全量加载" if result["used_full_load"] else "扩展名过滤加载"
         self._set_status(f"扫描完成，耗时 {result['elapsed']:.2f}s，共 {len(flat_files)} 个文件，{scan_mode_text}{collapse_hint}。", reset_after_ms=7000)
@@ -389,7 +411,7 @@ class CodeFeederApp:
     def _on_scan_error(self, scan_id, message):
         if scan_id != self.scan_request_id:
             return
-        self.is_scanning = False
+        self.state.is_scanning = False
         self._show_tree_message("扫描失败，请稍后重试。")
         self._set_status(f"扫描失败：{message}", reset_after_ms=7000)
         self._restore_generate_button()
@@ -478,43 +500,36 @@ class CodeFeederApp:
                 widget.bind("<Leave>", on_leave)
 
     def _toggle_folder_collapse(self, rel_path):
-        """切换文件夹折叠状态（独立功能）"""
-        if rel_path in self.collapsed_folders:
-            self.collapsed_folders.discard(rel_path)
+        if rel_path in self.state.collapsed_folders:
+            self.state.expand_folder(rel_path)
         else:
-            self.collapsed_folders.add(rel_path)
+            self.state.collapse_folder(rel_path)
         self._rerender_tree()
 
     def _rerender_tree(self):
-        """重新渲染目录树"""
-        if not self.all_files_map:
+        if not self.state.all_files_map:
             return
-        saved_selection = dict(self.selection_state)
+        saved_selection = dict(self.state.selection_state)
         self._clear_tree()
         self.path_to_label.clear()
 
-        flat_files = [(rel, full) for rel, full in self.all_files_map.items()]
-        visual_items, _ = TreeBuilder.build_visual_data(flat_files, self.collapsed_folders)
+        flat_files = [(rel, full) for rel, full in self.state.all_files_map.items()]
+        visual_items, _ = TreeBuilder.build_visual_data(flat_files, self.state.collapsed_folders)
 
         for item in visual_items:
             if item["type"] == "file":
-                self.selection_state[item["rel_path"]] = saved_selection.get(item["rel_path"], True)
+                self.state.selection_state[item["rel_path"]] = saved_selection.get(item["rel_path"], True)
             self._create_tree_row(item)
 
     def on_toggle_file(self, rel_path):
-        new_state = not self.selection_state[rel_path]
-        self.selection_state[rel_path] = new_state
+        new_state = self.state.toggle_file_selection(rel_path)
         self._update_item_visual(rel_path, new_state)
 
     def on_toggle_folder(self, rel_path):
-        affected_files = [p for p in self.all_files_map if p.startswith(rel_path + os.sep) or p == rel_path]
-        if not affected_files:
-            return
-        any_selected = any(self.selection_state.get(p, False) for p in affected_files)
-        new_state = not any_selected
+        new_state = self.state.toggle_folder_selection(rel_path)
+        affected_files = [p for p in self.state.all_files_map if p.startswith(rel_path + os.sep) or p == rel_path]
         for path in affected_files:
-            self.selection_state[path] = new_state
-            self._update_item_visual(path, new_state)
+            self._update_item_visual(path, self.state.selection_state.get(path, new_state))
         if rel_path in self.path_to_label:
             self._update_item_visual(rel_path, new_state)
 
@@ -534,21 +549,8 @@ class CodeFeederApp:
             icon_lbl.config(fg=COLORS["text_ignore"])
             lbl.config(font=FONTS["tree_strike"], fg=COLORS["text_ignore"])
 
-    def _build_output_path(self, input_path, mode):
-        suffix_map = {"normal": "_Codes.md", "gap": "_Gap.md", "skeleton": "_Skeleton.md"}
-        norm_path = os.path.abspath(os.path.normpath(input_path))
-
-        if os.path.isdir(norm_path):
-            parent_dir = os.path.dirname(norm_path)
-            base_name = os.path.basename(norm_path)
-        else:
-            parent_dir = os.path.dirname(norm_path)
-            base_name = os.path.splitext(os.path.basename(norm_path))[0]
-
-        return os.path.join(parent_dir, f"{base_name}{suffix_map.get(mode, '_Codes.md')}")
-
     def on_generate_click(self):
-        if self.is_scanning:
+        if self.state.is_scanning:
             messagebox.showinfo("请稍候", "正在扫描项目文件，请稍后再生成。")
             return
 
@@ -565,13 +567,13 @@ class CodeFeederApp:
             else:
                 return
 
-        selected_items = [(rel_path, self.all_files_map[rel_path]) for rel_path, selected in self.selection_state.items() if selected]
+        selected_items = self.state.get_selected_files()
         if not selected_items:
             messagebox.showwarning("提示", "请至少选择一个文件！")
             return
 
         mode = self.mode_var.get()
-        out_path = self._build_output_path(input_path, mode)
+        out_path = self.generate_controller.build_output_path(input_path, mode)
 
         self.btn_gen.config(state=tk.DISABLED, text="处理中...", bg=COLORS["bg_hover"])
         self._set_status("正在生成输出文件...")
@@ -580,29 +582,12 @@ class CodeFeederApp:
             self.progress_bar.pack(side=tk.LEFT, padx=10)
             self.progress_var.set(0)
 
-        ignored_rels = [rel_path for rel_path, selected in self.selection_state.items() if not selected]
-        reveal_source = self.last_path_source
+        ignored_rels = self.generate_controller.get_ignored_items()
+        reveal_source = self.state.path_source
 
-        def progress_callback(current, total, filename):
-            percent = int((current / total) * 100) if total else 0
-            self.root.after(0, lambda: self.progress_var.set(percent))
-
-        threading.Thread(
-            target=self._generate_thread,
-            args=(root_path, selected_items, out_path, mode, ignored_rels, progress_callback, reveal_source),
-            daemon=True
-        ).start()
-
-    def _generate_thread(self, root_path, items, out_path, mode, ignored_rels, progress_callback=None, reveal_source="manual"):
-        try:
-            char_count = self.manager.pipeline_write(root_path, items, out_path, mode, None, ignored_rels, progress_callback)
-            # 如果配置中启用了同时生成 TXT
-            if self.cfg.save_txt:
-                shutil.copy2(out_path, os.path.splitext(out_path)[0] + ".txt")
-            token_count = int(char_count / 3.5)
-            self.root.after(0, lambda: self._on_success(out_path, token_count, reveal_source))
-        except Exception as e:
-            self.root.after(0, lambda: self._on_error(str(e)))
+        self.generate_controller.generate(
+            root_path, selected_items, out_path, mode, ignored_rels, reveal_source
+        )
 
     def _on_success(self, path, token_count, reveal_source):
         self._restore_generate_button()

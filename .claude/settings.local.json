@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find E:/project/python/ToolsLauncher/AI_CodeFeeder_by_py -name *.py -type f)",
+      "Bash(.venv/Scripts/python.exe -c \"from Core.Installer import *; from Core.ConfigLoader import load_config; print\\(''Core modules OK''\\)\")",
+      "Bash(.venv/Scripts/python.exe -c \"from AppUI.SystemServices import *; print\\(''SystemServices OK''\\)\")",
+      "Bash(python CodeFeeder.pyw)",
+      "Bash(gh release:*)",
+      "Bash(winget install:*)"
+    ]
+  }
+}
