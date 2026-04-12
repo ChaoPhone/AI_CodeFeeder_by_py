@@ -1,3 +1,6 @@
+"""
+代码清洗器 - 支持多种语言的注释移除和骨架模式
+"""
 import re
 
 
@@ -7,18 +10,12 @@ def hollow_out_function_bodies(content):
     基于大括号计数 ({ count })
     使用正则预处理移除字符串字面量，避免转义判断复杂度
     """
-    # 1. 预处理：移除所有字符串和字符字面量（用占位符替代）
-    # 这样可以安全地处理括号匹配，不用担心字符串内的转义
     def replace_string(match):
-        # 根据字符串长度返回相同长度的空格占位符，保持结构
         return ' ' * len(match.group(0))
 
-    # 移除双引号字符串（包括转义的内容）
     content = re.sub(r'"(?:[^"\\]|\\.)*"', replace_string, content)
-    # 移除单引号字符串（包括转义的内容）
     content = re.sub(r"'(?:[^'\\]|\\.)*'", replace_string, content)
 
-    # 2. 大括号计数逻辑（现在字符串已移除，逻辑简单）
     output = []
     brace_depth = 0
 
@@ -40,14 +37,63 @@ def hollow_out_function_bodies(content):
     return "".join(output)
 
 
+def hollow_out_python_bodies(content):
+    """
+    【Python骨架模式】保留结构，掏空实现
+    基于缩进计数，保留函数/类定义，掏空实现
+    """
+    lines = content.split('\n')
+    output_lines = []
+    
+    in_block = False
+    block_indent = 0
+    block_type = None
+    
+    for line in lines:
+        stripped = line.strip()
+        current_indent = len(line) - len(line.lstrip())
+        
+        if not stripped:
+            output_lines.append('')
+            continue
+        
+        if stripped.startswith(('def ', 'class ', 'async def ')):
+            in_block = True
+            block_indent = current_indent
+            block_type = 'def' if 'def' in stripped else 'class'
+            output_lines.append(line)
+            continue
+        
+        if in_block:
+            if current_indent > block_indent:
+                if stripped and not stripped.startswith(('"""', "'''", '#')):
+                    if output_lines and output_lines[-1].strip() and not output_lines[-1].strip().endswith('...'):
+                        output_lines.append('    ' * ((current_indent // 4) or 1) + '...')
+                continue
+            elif current_indent <= block_indent and stripped:
+                in_block = False
+                block_indent = 0
+                block_type = None
+        
+        output_lines.append(line)
+    
+    return '\n'.join(output_lines)
+
+
 def remove_license_header(content):
     """移除常见的顶部版权注释"""
     match = re.match(r'^\s*/\*[\s\S]*?\*/', content)
     if match:
         header = match.group(0)
-        # 简单判定：包含 license/copyright 等关键词
         if any(k in header.lower() for k in ['copyright', 'license', 'author', 'file']):
             return content[len(header):].lstrip()
+    return content
+
+
+def remove_python_docstring(content):
+    """移除 Python 文档字符串"""
+    content = re.sub(r'\'\'\'[\s\S]*?\'\'\'', '', content)
+    content = re.sub(r'\"\"\"[\s\S]*?\"\"\"', '', content)
     return content
 
 
@@ -59,29 +105,36 @@ def clean_content_deeply(content, ext, aggressive_mode=False):
     """
     ext = ext.lower()
 
-    # 1. 根据后缀决定清洗逻辑
     if ext == '.py':
-        # 移除 Python import
         content = re.sub(r'^\s*(import|from)\s+.*$', '', content, flags=re.MULTILINE)
-        # 移除 Python 单行注释
         content = re.sub(r'#.*', '', content)
-        # 移除 Python 多行注释 (''' 或 """) - 简单处理，不考虑字符串内的情况
-        content = re.sub(r'\'\'\'[\s\S]*?\'\'\'', '', content)
-        content = re.sub(r'\"\"\"[\s\S]*?\"\"\"', '', content)
+        content = remove_python_docstring(content)
+        
+        if aggressive_mode:
+            content = hollow_out_python_bodies(content)
         
     elif ext in ['.c', '.cpp', '.h', '.hpp']:
-        # 移除 C/C++ 引用
         content = re.sub(r'^\s*#\s*(include|pragma|import).*$', '', content, flags=re.MULTILINE)
-        # 移除 C/C++ 单行注释
         content = re.sub(r'(?<!:)\/\/.*', '', content)
-        # 移除 C/C++ 块注释
         content = re.sub(r'/\*[\s\S]*?\*/', '', content)
+        
+        if aggressive_mode:
+            content = hollow_out_function_bodies(content)
+    
+    elif ext in ['.js', '.ts', '.jsx', '.tsx']:
+        content = re.sub(r'(?<!:)\/\/.*', '', content)
+        content = re.sub(r'/\*[\s\S]*?\*/', '', content)
+        
+        if aggressive_mode:
+            content = hollow_out_function_bodies(content)
+    
+    elif ext in ['.java', '.kt']:
+        content = re.sub(r'(?<!:)\/\/.*', '', content)
+        content = re.sub(r'/\*[\s\S]*?\*/', '', content)
+        
+        if aggressive_mode:
+            content = hollow_out_function_bodies(content)
 
-    # 2. 骨架模式 (仅对支持大括号的语言有效，当前逻辑基于大括号)
-    if aggressive_mode and ext in ['.c', '.cpp', '.h', '.hpp']:
-        content = hollow_out_function_bodies(content)
-
-    # 3. 格式整理 (去多余空行)
     content = re.sub(r'^[ \t]+$', '', content, flags=re.MULTILINE)
     content = re.sub(r'\n{3,}', '\n\n', content)
 
@@ -90,8 +143,7 @@ def clean_content_deeply(content, ext, aggressive_mode=False):
 
 def is_junk_filename(filename, extra_patterns=None):
     """文件名级过滤"""
-    # 基础垃圾文件名正则
-    base_pattern = r'(stm32.*?xx|system_|main\.h|stm32f4xx_hal_conf|FreeRTOSConfig)'
+    base_pattern = r'(stm32.*?xx|system_|main\.h|stm32f4xx_hal_conf|FreeRTOSConfig|__init__|setup\.py|test_|_test\.py)'
     if re.search(base_pattern, filename, re.IGNORECASE):
         return True
     return False
