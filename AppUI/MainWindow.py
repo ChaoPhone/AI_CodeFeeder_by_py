@@ -791,135 +791,7 @@ class CodeFeederApp:
         maxfiles_spin = tk.Spinbox(maxfiles_frame, from_=100, to=10000, increment=100, width=8, textvariable=self.settings_max_files_var, bg=COLORS["bg_input"], fg=COLORS["fg_text"], relief=tk.FLAT, font=FONTS["ui"])
         maxfiles_spin.pack(anchor="w", pady=(4, 0))
 
-    def _switch_settings_tab(self, tab_id):
-        """切换设置页面选项卡"""
-        self.settings_tab_var.set(tab_id)
-        self._update_settings_tab_visual(tab_id)
-
-        # 清除内容区域
-        for widget in self.settings_content_frame.winfo_children():
-            widget.destroy()
-
-        # 渲染对应内容
-        if tab_id == "general":
-            self._render_general_settings()
-        elif tab_id == "scan":
-            self._render_scan_settings()
-        elif tab_id == "perf":
-            self._render_perf_settings()
-
-    def _update_settings_tab_visual(self, active_tab):
-        """更新选项卡按钮的视觉状态"""
-        for tab_id, widgets in self.settings_tab_btns.items():
-            if tab_id == active_tab:
-                widgets["frame"].config(bg=COLORS["bg_selected"])
-                widgets["label"].config(bg=COLORS["bg_selected"], fg=COLORS["accent"])
-            else:
-                widgets["frame"].config(bg=COLORS["bg_panel"])
-                widgets["label"].config(bg=COLORS["bg_panel"], fg=COLORS["fg_text"])
-
     
-    def _render_general_settings(self):
-        """渲染常规设置页面"""
-        parent = self.settings_content_frame
-
-        tk.Label(parent, text="常规设置", bg=COLORS["bg_main"], fg=COLORS["fg_heading"], font=FONTS["h2"]).pack(anchor="w")
-        tk.Label(parent, text="配置默认行为与输出选项", bg=COLORS["bg_main"], fg=COLORS["fg_secondary"], font=FONTS["ui"]).pack(anchor="w", pady=(4, 16))
-
-        # 默认输出模式
-        mode_panel = RoundedFrame(parent, radius=8)
-        mode_panel.pack(fill=tk.X, pady=(0, 12))
-        mode_inner = mode_panel.inner_frame
-
-        tk.Label(mode_inner, text="默认输出模式", bg=COLORS["bg_panel"], fg=COLORS["fg_heading"], font=FONTS["ui_bold"]).pack(anchor="w", padx=12, pady=(12, 4))
-        mode_opts = tk.Frame(mode_inner, bg=COLORS["bg_panel"])
-        mode_opts.pack(fill=tk.X, padx=12, pady=(4, 12))
-        for mode_val, mode_label in [("normal", "普通"), ("gap", "简洁"), ("skeleton", "骨架")]:
-            tk.Radiobutton(mode_opts, text=mode_label, variable=self.settings_mode_var, value=mode_val, bg=COLORS["bg_panel"], fg=COLORS["fg_text"], selectcolor=COLORS["bg_input"], activebackground=COLORS["bg_panel"], activeforeground=COLORS["accent"], font=FONTS["ui"], cursor="hand2").pack(side=tk.LEFT, padx=8)
-
-        # 输出选项
-        output_panel = RoundedFrame(parent, radius=8)
-        output_panel.pack(fill=tk.X)
-        output_inner = output_panel.inner_frame
-
-        tk.Label(output_inner, text="输出选项", bg=COLORS["bg_panel"], fg=COLORS["fg_heading"], font=FONTS["ui_bold"]).pack(anchor="w", padx=12, pady=(12, 4))
-        tk.Checkbutton(output_inner, text="同时生成 .txt 文件", variable=self.settings_save_txt_var, bg=COLORS["bg_panel"], fg=COLORS["fg_text"], selectcolor=COLORS["bg_input"], activebackground=COLORS["bg_panel"], activeforeground=COLORS["accent"], font=FONTS["ui"], cursor="hand2").pack(anchor="w", padx=12, pady=(4, 12))
-
-    def _render_scan_settings(self):
-        """渲染扫描规则页面"""
-        parent = self.settings_content_frame
-
-        tk.Label(parent, text="扫描规则", bg=COLORS["bg_main"], fg=COLORS["fg_heading"], font=FONTS["h2"]).pack(anchor="w")
-        tk.Label(parent, text="定义扫描时允许的文件类型与忽略的目录", bg=COLORS["bg_main"], fg=COLORS["fg_secondary"], font=FONTS["ui"]).pack(anchor="w", pady=(4, 16))
-
-        # 允许的后缀
-        ext_panel = RoundedFrame(parent, radius=8)
-        ext_panel.pack(fill=tk.X, pady=(0, 12))
-        ext_inner = ext_panel.inner_frame
-
-        tk.Label(ext_inner, text="允许的文件后缀", bg=COLORS["bg_panel"], fg=COLORS["fg_heading"], font=FONTS["ui_bold"]).pack(anchor="w", padx=12, pady=(12, 4))
-        tk.Label(ext_inner, text="点击 ✕ 移除，在输入框输入并按 Enter 添加", bg=COLORS["bg_panel"], fg=COLORS["fg_secondary"], font=("Microsoft YaHei UI", 9)).pack(anchor="w", padx=12, pady=(4, 4))
-
-        self.ext_tag_cloud = TagCloudFrame(
-            ext_inner,
-            items=self.temp_config_data.get("allowed_extensions", []),
-            on_remove_item=lambda x: None,
-            on_add_item=lambda x: None,
-            add_placeholder="添加后缀...",
-            max_per_row=8,
-            bg=COLORS["bg_panel"]
-        )
-        self.ext_tag_cloud.pack(fill=tk.X, padx=12, pady=(4, 12))
-
-        # 忽略目录
-        ignore_panel = RoundedFrame(parent, radius=8)
-        ignore_panel.pack(fill=tk.X)
-        ignore_inner = ignore_panel.inner_frame
-
-        tk.Label(ignore_inner, text="忽略的目录", bg=COLORS["bg_panel"], fg=COLORS["fg_heading"], font=FONTS["ui_bold"]).pack(anchor="w", padx=12, pady=(12, 4))
-        tk.Label(ignore_inner, text="扫描时跳过这些目录", bg=COLORS["bg_panel"], fg=COLORS["fg_secondary"], font=("Microsoft YaHei UI", 9)).pack(anchor="w", padx=12, pady=(4, 4))
-
-        self.ignore_tag_cloud = TagCloudFrame(
-            ignore_inner,
-            items=self.temp_config_data.get("ignore_dirs", []),
-            on_remove_item=lambda x: None,
-            on_add_item=lambda x: None,
-            add_placeholder="添加目录...",
-            max_per_row=8,
-            bg=COLORS["bg_panel"]
-        )
-        self.ignore_tag_cloud.pack(fill=tk.X, padx=12, pady=(4, 12))
-
-    def _render_perf_settings(self):
-        """渲染性能阈值页面"""
-        parent = self.settings_content_frame
-
-        tk.Label(parent, text="性能阈值", bg=COLORS["bg_main"], fg=COLORS["fg_heading"], font=FONTS["h2"]).pack(anchor="w")
-        tk.Label(parent, text="控制全量扫描的超时时间与最大文件数量限制", bg=COLORS["bg_main"], fg=COLORS["fg_secondary"], font=FONTS["ui"]).pack(anchor="w", pady=(4, 16))
-
-        perf_panel = RoundedFrame(parent, radius=8)
-        perf_panel.pack(fill=tk.X)
-        perf_inner = perf_panel.inner_frame
-
-        tk.Label(perf_inner, text="扫描限制", bg=COLORS["bg_panel"], fg=COLORS["fg_heading"], font=FONTS["ui_bold"]).pack(anchor="w", padx=12, pady=(12, 8))
-
-        # 水平并列放置两个设置项
-        opts_frame = tk.Frame(perf_inner, bg=COLORS["bg_panel"])
-        opts_frame.pack(fill=tk.X, padx=12, pady=(4, 12))
-
-        # 扫描超时
-        timeout_frame = tk.Frame(opts_frame, bg=COLORS["bg_panel"])
-        timeout_frame.pack(side=tk.LEFT, fill=tk.X, expand=True)
-        tk.Label(timeout_frame, text="扫描超时 (秒):", bg=COLORS["bg_panel"], fg=COLORS["fg_text"], font=FONTS["ui"]).pack(anchor="w")
-        timeout_spin = tk.Spinbox(timeout_frame, from_=1, to=30, width=8, textvariable=self.settings_timeout_var, bg=COLORS["bg_input"], fg=COLORS["fg_text"], relief=tk.FLAT, font=FONTS["ui"])
-        timeout_spin.pack(anchor="w", pady=(4, 0))
-
-        # 最大文件数
-        maxfiles_frame = tk.Frame(opts_frame, bg=COLORS["bg_panel"])
-        maxfiles_frame.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(24, 0))
-        tk.Label(maxfiles_frame, text="最大文件数:", bg=COLORS["bg_panel"], fg=COLORS["fg_text"], font=FONTS["ui"]).pack(anchor="w")
-        maxfiles_spin = tk.Spinbox(maxfiles_frame, from_=100, to=10000, increment=100, width=8, textvariable=self.settings_max_files_var, bg=COLORS["bg_input"], fg=COLORS["fg_text"], relief=tk.FLAT, font=FONTS["ui"])
-        maxfiles_spin.pack(anchor="w", pady=(4, 0))
 
     def _collect_visual_data(self):
         """从可视化组件收集数据"""
@@ -947,9 +819,9 @@ class CodeFeederApp:
         self.settings_max_files_var.set(str(self.temp_config_data.get("full_load_max_files", 2500)))
         self.settings_save_txt_var.set(self.temp_config_data.get("save_txt", False))
 
-        # 重新渲染当前选项卡以更新 TagCloudFrame
-        current_tab = self.settings_tab_var.get()
-        self._switch_settings_tab(current_tab)
+        for widget in self.settings_content_frame.winfo_children():
+            widget.destroy()
+        self._render_all_settings()
 
     def _close_settings(self):
         if self.settings_window and self.settings_window.winfo_exists():

@@ -69,12 +69,12 @@
     "package-lock.json",
     "yarn.lock"
   ],
-  "default_mode": "gap",
+  "default_mode": "normal",
   "full_load_timeout_seconds": 5,
   "full_load_max_files": 2500,
-  "save_txt": true,
+  "save_txt": false,
   "version": [
-    "v1.8.1",
-    "设置修复版"
+    "v1.9.6",
+    "设置页面修复"
   ]
 }
