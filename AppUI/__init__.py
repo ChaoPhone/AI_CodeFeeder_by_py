@@ -7,6 +7,15 @@ from .Components import RoundedFrame, TagCloudFrame
 from .Tree import TreeBuilder
 from .models import AppState
 from .controllers import ScanController, GenerateController, SettingsController
+from .services import (
+    SingleInstanceService,
+    HotkeyService,
+    TrayService,
+    ExplorerService,
+    StartupService,
+    set_win11_corners,
+    get_missing_dependency_messages,
+)
 
 __all__ = [
     "CodeFeederApp",
@@ -19,4 +28,11 @@ __all__ = [
     "ScanController",
     "GenerateController",
     "SettingsController",
+    "SingleInstanceService",
+    "HotkeyService",
+    "TrayService",
+    "ExplorerService",
+    "StartupService",
+    "set_win11_corners",
+    "get_missing_dependency_messages",
 ]

@@ -20,10 +20,10 @@ from .Views import MainView
 from .Components import RoundedFrame, RoundedButton, TagCloudFrame
 from .models import AppState
 from .controllers import ScanController, GenerateController, SettingsController
-from .SystemServices import (
+from .services import (
     set_win11_corners,
-    SystemHotkeyService,
-    SystemTrayService,
+    HotkeyService,
+    TrayService,
     StartupService,
     ExplorerService,
     get_missing_dependency_messages,
@@ -90,8 +90,8 @@ class CodeFeederApp:
             on_status_update=self._set_status
         )
 
-        self.hotkey_service = SystemHotkeyService(self._on_hotkey_triggered)
-        self.tray_service = SystemTrayService(
+        self.hotkey_service = HotkeyService(self._on_hotkey_triggered)
+        self.tray_service = TrayService(
             on_show=self._show_window,
             on_quit=self._quit_app,
             get_startup_status=StartupService.is_startup_enabled,
