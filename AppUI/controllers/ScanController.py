@@ -30,6 +30,10 @@ class ScanController:
         self.on_progress = on_progress
         self._scan_id = 0
     
+    def update_manager(self, manager: ProjectManager) -> None:
+        """更新 manager 引用（配置更新后调用）"""
+        self.manager = manager
+    
     def scan_path(self, path: str, source: str = "manual") -> threading.Event:
         """
         启动扫描
@@ -103,7 +107,8 @@ class ScanController:
         default_selected = not self.state.whitelist_mode
         visual_items, auto_collapsed = TreeBuilder.build_visual_data(
             flat_files, 
-            self.state.collapsed_folders
+            self.state.collapsed_folders,
+            self.state.user_expanded_folders
         )
         
         self.state.collapsed_folders = auto_collapsed

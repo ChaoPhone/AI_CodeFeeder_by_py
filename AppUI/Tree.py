@@ -10,13 +10,16 @@ class TreeBuilder:
     AUTO_COLLAPSE_THRESHOLD = 10  # 超过此数量自动折叠
 
     @staticmethod
-    def build_visual_data(file_list, collapsed_folders=None):
+    def build_visual_data(file_list, collapsed_folders=None, user_expanded_folders=None):
         """
         入口函数
         collapsed_folders: 需要折叠的文件夹路径集合
+        user_expanded_folders: 用户手动展开的文件夹路径集合（不会被自动折叠）
         """
         if collapsed_folders is None:
             collapsed_folders = set()
+        if user_expanded_folders is None:
+            user_expanded_folders = set()
 
         # 1. 构建树，同时标记叶子节点
         tree = {}
@@ -31,8 +34,11 @@ class TreeBuilder:
                 else:
                     curr = curr.setdefault(part, {})
 
-        # 自动检测需要折叠的大文件夹
-        auto_collapsed = TreeBuilder._find_large_folders(tree, "", TreeBuilder.AUTO_COLLAPSE_THRESHOLD)
+        # 自动检测需要折叠的大文件夹（排除用户已手动展开的）
+        auto_collapsed = TreeBuilder._find_large_folders(
+            tree, "", TreeBuilder.AUTO_COLLAPSE_THRESHOLD, 
+            exclude_folders=user_expanded_folders
+        )
         collapsed_folders = collapsed_folders.union(auto_collapsed)
 
         render_list = []
@@ -40,19 +46,27 @@ class TreeBuilder:
         return render_list, collapsed_folders
 
     @staticmethod
-    def _find_large_folders(tree, current_path, threshold):
-        """递归查找超过阈值的文件夹"""
+    def _find_large_folders(tree, current_path, threshold, exclude_folders=None):
+        """递归查找超过阈值的文件夹（排除用户已手动展开的）"""
+        if exclude_folders is None:
+            exclude_folders = set()
+        
         large_folders = set()
 
         for key, val in tree.items():
             if val != "__FILE__":
                 folder_path = os.path.join(current_path, key) if current_path else key
+                
+                # 如果用户已手动展开此文件夹，跳过自动折叠检测
+                if folder_path in exclude_folders:
+                    continue
+                
                 # 计算该文件夹下的文件数量
                 file_count = TreeBuilder._count_files_in_folder(val)
                 if file_count > threshold:
                     large_folders.add(folder_path)
                 # 继续递归检查子文件夹
-                large_folders.update(TreeBuilder._find_large_folders(val, folder_path, threshold))
+                large_folders.update(TreeBuilder._find_large_folders(val, folder_path, threshold, exclude_folders))
 
         return large_folders
 

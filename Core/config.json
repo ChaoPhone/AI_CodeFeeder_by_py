@@ -53,7 +53,8 @@
     "EWARM",
     "DebugVals",
     "Docs",
-    "Doc"
+    "Doc",
+    ".gitignore"
   ],
   "ignore_prefixes": [
     "system_stm32",
@@ -70,11 +71,11 @@
     "yarn.lock"
   ],
   "default_mode": "normal",
-  "full_load_timeout_seconds": 5,
+  "full_load_timeout_seconds": 4,
   "full_load_max_files": 2500,
   "save_txt": false,
   "version": [
-    "v1.9.6",
-    "设置页面修复"
+    "v1.9.7",
+    "配置更新生效、文件夹展开修复、设置窗口扩大"
   ]
 }

@@ -26,6 +26,7 @@ class AppState:
     selection_state: Dict[str, bool] = field(default_factory=dict)
     path_to_label: Dict[str, Any] = field(default_factory=dict)
     collapsed_folders: Set[str] = field(default_factory=set)
+    user_expanded_folders: Set[str] = field(default_factory=set)
     
     scan_cancel_event: Optional[threading.Event] = None
     status_reset_job: Optional[int] = None
@@ -44,6 +45,7 @@ class AppState:
         self.selection_state.clear()
         self.path_to_label.clear()
         self.collapsed_folders.clear()
+        self.user_expanded_folders.clear()
         if self.scan_cancel_event:
             self.scan_cancel_event.set()
         self.scan_cancel_event = None
@@ -120,8 +122,9 @@ class AppState:
         self.collapsed_folders.add(folder_path)
     
     def expand_folder(self, folder_path: str) -> None:
-        """展开文件夹"""
+        """展开文件夹（标记为用户手动展开）"""
         self.collapsed_folders.discard(folder_path)
+        self.user_expanded_folders.add(folder_path)
     
     def is_folder_collapsed(self, folder_path: str) -> bool:
         """检查文件夹是否折叠"""

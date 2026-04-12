@@ -224,6 +224,7 @@ class CodeFeederApp:
         current_mode = self.mode_var.get()
         self.cfg = load_config()
         self.manager = ProjectManager(self.cfg)
+        self.scan_controller.update_manager(self.manager)
         self.root.title(f"AI CodeFeeder - {self._get_version_title()}")
         if preserve_mode:
             self.mode_var.set(self._sanitize_mode(current_mode))
@@ -393,7 +394,11 @@ class CodeFeederApp:
             self._restore_generate_button()
             return
 
-        visual_items, auto_collapsed = TreeBuilder.build_visual_data(flat_files, self.state.collapsed_folders)
+        visual_items, auto_collapsed = TreeBuilder.build_visual_data(
+            flat_files, 
+            self.state.collapsed_folders,
+            self.state.user_expanded_folders
+        )
         self.state.collapsed_folders = auto_collapsed
         
         for item in visual_items:
@@ -514,7 +519,11 @@ class CodeFeederApp:
         self.path_to_label.clear()
 
         flat_files = [(rel, full) for rel, full in self.state.all_files_map.items()]
-        visual_items, _ = TreeBuilder.build_visual_data(flat_files, self.state.collapsed_folders)
+        visual_items, _ = TreeBuilder.build_visual_data(
+            flat_files, 
+            self.state.collapsed_folders,
+            self.state.user_expanded_folders
+        )
 
         for item in visual_items:
             if item["type"] == "file":
@@ -626,7 +635,7 @@ class CodeFeederApp:
 
         self.settings_window = tk.Toplevel(self.root)
         self.settings_window.title("设置")
-        self.settings_window.geometry("700x600")
+        self.settings_window.geometry("1000x800")
         self.settings_window.configure(bg=COLORS["bg_main"])
         self.settings_window.transient(self.root)
         self.settings_window.grab_set()
